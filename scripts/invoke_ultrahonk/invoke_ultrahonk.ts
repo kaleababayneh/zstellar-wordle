@@ -27,7 +27,7 @@ import { ArgumentParser } from 'argparse';
 
 const DEFAULT_CONTRACT_ID = 'CD6HGS5V7XJPSPJ5HHPHUZXLYGZAJJC3L6QWR4YZG4NIRO65UYQ6KIYP';
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
-const DEFAULT_DATASET_DIR = path.resolve(REPO_ROOT, 'tests', 'simple_circuit', 'target');
+const DEFAULT_DATASET_DIR = path.resolve(REPO_ROOT, 'circuit', 'target');
 
 // === Data loading / packing ==================================================
 

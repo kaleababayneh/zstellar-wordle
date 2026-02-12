@@ -7,7 +7,7 @@ NETWORK_NAME="${STELLAR_NETWORK_NAME:-local}"
 SOURCE_ACCOUNT="${STELLAR_SOURCE_ACCOUNT:-alice}"
 RPC_URL="${STELLAR_RPC_URL:-http://localhost:8000/soroban/rpc}"
 NETWORK_PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:-Standalone Network ; February 2017}"
-DATASET_DIR="${ULTRAHONK_DATASET:-$ROOT_DIR/tests/simple_circuit/target}"
+DATASET_DIR="${ULTRAHONK_DATASET:-$ROOT_DIR/circuit/target}"
 
 cleanup() {
   stellar container stop "$CONTAINER_NAME" >/dev/null 2>&1 || true

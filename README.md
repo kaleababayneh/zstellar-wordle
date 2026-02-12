@@ -1,64 +1,69 @@
 # rs-soroban-ultrahonk
 
-Soroban contract wrapper around the Noir(UltraHonk) verifier. The VK is set at deploy time; proofs are verified with `public_inputs` and `proof`.
+Verify Noir (UltraHonk) proofs on Stellar/Soroban. The verification key is set at deploy time; proofs are verified on-chain via `verify_proof`.
+
+## Project structure
+
+```
+circuit/             ← Noir circuit (simple_circuit: assert x != y)
+  src/main.nr
+  Prover.toml
+  Nargo.toml
+src/lib.rs           ← Soroban contract wrapper
+ultrahonk-soroban-verifier/  ← Pure verifier library
+tests/
+  build_circuits.sh  ← Builds circuit artifacts (vk, proof, public_inputs)
+  integration_tests.rs
+scripts/
+  invoke_ultrahonk/  ← Helper to invoke verify_proof via CLI
+  run_localnet_e2e.sh
+```
 
 ## Quickstart (localnet)
 
-Prereqs:
-- `stellar` CLI (stellar-cli)
+### Prerequisites
+
+- `stellar` CLI
 - Rust + `wasm32v1-none` target
 - Docker (for localnet)
+- Noir tooling (`nargo 1.0.0-beta.9`) and `bb v0.87.0` (auto-installed by `build_circuits.sh`)
 
-```bash
-# 1) Start localnet
-stellar container start -t future --name local --limits unlimited
-
-# 2) Configure network + identity
-stellar network add local \
-  --rpc-url http://localhost:8000/soroban/rpc \
-  --network-passphrase "Standalone Network ; February 2017"
-stellar network use local
-stellar network health --output json
-stellar keys generate --global alice
-stellar keys fund alice --network local
-stellar keys address alice
-
-# 3) Build + deploy (constructor requires a VK from tests/build_circuits.sh)
-rustup target add wasm32v1-none
-stellar contract build --optimize
-stellar contract deploy \
-  --wasm target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm \
-  --source alice \
-  -- \
-  --vk_bytes-file-path tests/simple_circuit/target/vk
-```
-
-## Invoke verify_proof
-
-### Build ZK artifacts (vk/proof/public_inputs)
-
-From the repo root. You need Noir tooling (`nargo`) and `bb` (barretenberg). Artifacts are generated with `--oracle_hash keccak`.
+### 1. Build circuit artifacts
 
 ```bash
 tests/build_circuits.sh
 ```
 
-### Use the helper script
+This generates `circuit/target/{vk, proof, public_inputs}`.
 
-Expects a dataset folder with `public_inputs`, `proof` (the VK is already on-chain from deploy):
+### 2. Start localnet
 
 ```bash
-cd scripts/invoke_ultrahonk
-npm install
-npx ts-node invoke_ultrahonk.ts invoke \
-  --dataset ../../tests/simple_circuit/target \
-  --contract-id <CONTRACT_ID> \
-  --network local \
-  --source-account alice \
-  --send yes
+stellar container start -t future --name local --limits unlimited
+
+stellar network add local \
+  --rpc-url http://localhost:8000/soroban/rpc \
+  --network-passphrase "Standalone Network ; February 2017"
+stellar network use local
+
+stellar keys generate alice
+stellar keys fund alice --network local
 ```
 
-### Direct CLI invoke
+### 3. Build & deploy contract
+
+```bash
+rustup target add wasm32v1-none
+stellar contract build --optimize
+
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm \
+  --source alice \
+  -- \
+  --vk_bytes-file-path circuit/target/vk
+```
+
+### 4. Verify proof
 
 ```bash
 stellar contract invoke \
@@ -66,37 +71,23 @@ stellar contract invoke \
   --source alice \
   --network local \
   --send yes \
-  --cost \
   -- \
   verify_proof \
-  --public_inputs-file-path tests/simple_circuit/target/public_inputs \
-  --proof_bytes-file-path tests/simple_circuit/target/proof
+  --public_inputs-file-path circuit/target/public_inputs \
+  --proof_bytes-file-path circuit/target/proof
 ```
-
-## VK policy (important)
-
-This contract does not enforce access control:
-- `__constructor` stores the VK once at deploy time (immutable after first set).
-- `verify_proof` always uses the stored VK set at deploy.
 
 ## Tests
 
 ```bash
 RUST_TEST_THREADS=1 cargo test --test integration_tests -- --nocapture
-cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testutils -- --nocapture
 ```
 
 ## References
 
-- Noir language: https://noir-lang.org/
-- Barretenberg (bb): https://github.com/AztecProtocol/aztec-packages
-- rs-soroban-ultrahonk: https://github.com/yugocabrio/rs-soroban-ultrahonk
-- Soroban documentation: https://developers.stellar.org/docs/build/smart-contracts
-- Soroban SDK (Rust): https://github.com/stellar/rs-soroban-sdk
-
-## Audit status
-
-This project has not been audited.
+- [Noir language](https://noir-lang.org/)
+- [Barretenberg (bb)](https://github.com/AztecProtocol/aztec-packages)
+- [Soroban documentation](https://developers.stellar.org/docs/build/smart-contracts)
 
 ## License
 

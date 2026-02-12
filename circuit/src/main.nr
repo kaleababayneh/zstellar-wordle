@@ -1,5 +1,5 @@
 fn main(x: Field, y: pub Field) {
-    assert(x != y);
+    assert(x as u8 > y as u8);
 }
 
 #[test]

@@ -43,26 +43,22 @@ install_bb() {
 install_nargo
 install_bb
 
-# ─── build every circuit ───
-for dir in circuits/* ; do
-  [ -d "$dir" ] || continue
-  name=$(basename "$dir")
-  echo "► building $name"
-  pushd "$dir" >/dev/null
+# ─── build circuit ───
+dir="circuits/simple_circuit"
+name="simple_circuit"
+echo "► building $name"
+pushd "$dir" >/dev/null
 
-  [ -f Prover.toml ] || nargo check --overwrite
-  nargo execute
+[ -f Prover.toml ] || nargo check --overwrite
+nargo execute
 
-  json="target/${name}.json"
-  gz="target/${name}.gz"
+json="target/${name}.json"
+gz="target/${name}.gz"
 
-  bb prove -b "$json" -w "$gz" -o target \
-    --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
+bb prove -b "$json" -w "$gz" -o target \
+  --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
-  bb write_vk -b "$json" -o target \
-    --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
+bb write_vk -b "$json" -o target \
+  --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
-  bb write_solidity_verifier -s ultra_honk -k target/vk -o target/Verifier.sol
-
-  popd >/dev/null
-done
+popd >/dev/null

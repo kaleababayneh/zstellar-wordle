@@ -48,31 +48,28 @@ cd "$REPO_ROOT"
 install_nargo
 install_bb
 
-for dir in tests/* ; do
-  [ -d "$dir" ] || continue
-  [ -f "$dir/Nargo.toml" ] || continue
+CIRCUIT_DIR="$REPO_ROOT/circuit"
+NAME=$(basename "$CIRCUIT_DIR")
 
-  name=$(basename "$dir")
-  echo "► building $name"
-  pushd "$dir" >/dev/null
+echo "► building $NAME"
+pushd "$CIRCUIT_DIR" >/dev/null
 
-  [ -f Prover.toml ] || nargo check --overwrite
-  nargo execute
+[ -f Prover.toml ] || nargo check --overwrite
+nargo execute
 
-  json="target/${name}.json"
-  gz="target/${name}.gz"
+json="target/${NAME}.json"
+gz="target/${NAME}.gz"
 
-  bb prove -b "$json" -w "$gz" -o target \
-    --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
+bb prove -b "$json" -w "$gz" -o target \
+  --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
-  bb write_vk -b "$json" -o target \
-    --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
+bb write_vk -b "$json" -o target \
+  --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
-  if [[ -d target/vk && -f target/vk/vk ]]; then
-    mv target/vk/vk target/vk.tmp
-    rmdir target/vk
-    mv target/vk.tmp target/vk
-  fi
+if [[ -d target/vk && -f target/vk/vk ]]; then
+  mv target/vk/vk target/vk.tmp
+  rmdir target/vk
+  mv target/vk.tmp target/vk
+fi
 
-  popd >/dev/null
-done
+popd >/dev/null
