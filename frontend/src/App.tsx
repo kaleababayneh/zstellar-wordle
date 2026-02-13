@@ -91,19 +91,20 @@ function App() {
 
       // 1. Generate ZK proof in browser (already preloaded)
       const { generateProof } = await import("./generateProof");
-      const { proofBlob, vkBytes, proofId } = await generateProof(
+      const { proof, publicInputsBytes, proofId } = await generateProof(
         savedGuess,
         addStatus
       );
 
       addStatus(`Proof ID: ${proofId.slice(0, 16)}…`);
 
-      // 2. Verify on-chain (dynamic import)
+      // 2. Verify on-chain — deployed contract: verify_proof(public_inputs, proof_bytes)
+      //    VK is already stored on-chain at deploy time.
       addStatus("Submitting proof to Stellar testnet…");
       const { verifyProofOnChain } = await import("./soroban");
       const verified = await verifyProofOnChain(
-        proofBlob,
-        vkBytes,
+        publicInputsBytes,
+        proof,
         wallet.address!,
         wallet.sign,
         addStatus

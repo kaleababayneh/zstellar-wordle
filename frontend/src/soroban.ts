@@ -19,12 +19,15 @@ export type SignTransaction = (
 /**
  * Verify a proof on-chain via the Soroban UltraHonk verifier contract.
  *
- * Uses Freighter (or any compatible wallet) to sign the transaction
- * instead of requiring a raw secret key.
+ * The deployed contract interface:
+ *   verify_proof(public_inputs: Bytes, proof_bytes: Bytes) -> Result<(), Error>
+ *   VK is already stored on-chain at deploy time.
+ *
+ * Uses Freighter (or any compatible wallet) to sign the transaction.
  */
 export async function verifyProofOnChain(
-  proofBlob: Uint8Array,
-  vkBytes: Uint8Array,
+  publicInputsBytes: Uint8Array,
+  proofBytes: Uint8Array,
   publicKey: string,
   signTx: SignTransaction,
   onStatus?: (msg: string) => void
@@ -32,6 +35,7 @@ export async function verifyProofOnChain(
   const log = onStatus ?? console.log;
 
   log("Preparing Soroban transaction…");
+  log(`Proof size: ${proofBytes.length} bytes, Public inputs: ${publicInputsBytes.length} bytes`);
 
   const server = getServer();
   const account = await server.getAccount(publicKey);
@@ -45,8 +49,8 @@ export async function verifyProofOnChain(
     .addOperation(
       contract.call(
         "verify_proof",
-        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(vkBytes)),
-        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBlob))
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
       )
     )
     .setTimeout(120)

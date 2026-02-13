@@ -8,8 +8,13 @@ import { wordToAsciiCodes, calculateWordleResults } from "./gameLogic";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 
 export interface ProofArtifacts {
+  /** Raw proof bytes (456 * 32 = 14592 bytes) */
   proof: Uint8Array;
+  /** Encoded public inputs as concatenated 32-byte BE fields */
+  publicInputsBytes: Uint8Array;
+  /** Proof blob (header || publicInputs || proof) — for reference contract */
   proofBlob: Uint8Array;
+  /** VK bytes — for reference contract that accepts VK per-call */
   vkBytes: Uint8Array;
   proofId: string;
   publicInputs: string[];
@@ -202,10 +207,12 @@ export async function generateProof(
   const vkBytes = await loadVk();
   log(`VK loaded: ${vkBytes.length} bytes ✅`);
 
+  const rawProof = proof.proof ?? proof;
   const publicInputsStrings = publicInputs.map((x: any) => x.toString());
 
   return {
-    proof: proof.proof ?? proof,
+    proof: rawProof,
+    publicInputsBytes,
     proofBlob,
     vkBytes,
     proofId,
