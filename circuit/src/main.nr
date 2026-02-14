@@ -21,17 +21,6 @@ fn main(
     )
      {
 
-    // let first_letter_commitment = Poseidon2::hash([ salt, first_letter], 2);
-    // assert(first_letter_commitment == first_letter_commitment_hash);
-    // let second_letter_commitment = Poseidon2::hash([salt, second_letter], 2);
-    // assert(second_letter_commitment == second_letter_commitment_hash);
-    // let third_letter_commitment = Poseidon2::hash([salt, third_letter], 2);
-    // assert(third_letter_commitment == third_letter_commitment_hash);
-    // let fourth_letter_commitment = Poseidon2::hash([salt, fourth_letter], 2);
-    // assert(fourth_letter_commitment == fourth_letter_commitment_hash);
-    // let fifth_letter_commitment = Poseidon2::hash([salt, fifth_letter], 2);
-    // assert(fifth_letter_commitment == fifth_letter_commitment_hash);
-    // The above code is commented out to avoid redundancy, as the commitment verification can be done outside the circuit.
 
     assert(commitment_hashes == Poseidon2::hash([salt, first_letter, second_letter, third_letter, fourth_letter, fifth_letter], 6));
 
