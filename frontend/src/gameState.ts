@@ -1,21 +1,18 @@
 import { Barretenberg, Fr } from "@aztec/bb.js";
 import { CONTRACT_ID } from "./config";
+import words from "an-array-of-english-words";
 
-// ── Word list ──────────────────────────────────────────────────────────────────
 
-const WORD_LIST = [
-    "apple", "brain", "chair", "dance", "eagle",
-    "flame", "grape", "house", "juice", "kneel",
-    "lemon", "mango", "night", "ocean", "piano",
-    "queen", "river", "stone", "tiger", "uncle",
-    "viola", "whale", "xenon", "youth", "zebra",
-    "amber", "blaze", "crane", "dream", "earth",
-    "frost", "glyph", "heart", "ivory", "joker",
-    "knock", "lunar", "marsh", "noble", "orbit",
-    "pearl", "quest", "robin", "solar", "trace",
-    "unity", "vigor", "wrist", "pixel", "zonal",
-];
 
+
+let WORDLE = words.filter((w) => 
+    w.length === 5 && 
+    !w.includes("'") && 
+    !w.includes("-") && 
+    !w.includes(" "));
+
+const WORD_LIST = WORDLE.map(w => w.toLowerCase());
+console.log(WORD_LIST.length);
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface GameState {
