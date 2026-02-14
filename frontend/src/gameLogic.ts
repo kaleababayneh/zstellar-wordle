@@ -8,7 +8,13 @@ export function wordToAsciiCodes(word: string): string[] {
     .map((ch) => ch.charCodeAt(0).toString());
 }
 
-/** Wordle comparison: returns [2,2,1,0,0] etc. */
+/** Wordle comparison — matches the Noir circuit logic exactly.
+ *
+ * The circuit does NOT track "used" letters for duplicate handling.
+ * It simply checks: exact match → 2, exists anywhere → 1, absent → 0.
+ * This differs from standard Wordle rules but must match the circuit
+ * to avoid "Cannot satisfy constraint" errors during witness generation.
+ */
 export function calculateWordleResults(
   guess: string,
   correct: string
@@ -17,23 +23,20 @@ export function calculateWordleResults(
   const c = correct.toLowerCase().split("");
   const results: number[] = new Array(WORD_LENGTH).fill(WORDLE_RESULTS.INCORRECT);
 
-  // First pass: mark correct positions
-  const usedCorrect = new Array(WORD_LENGTH).fill(false);
   for (let i = 0; i < WORD_LENGTH; i++) {
     if (g[i] === c[i]) {
       results[i] = WORDLE_RESULTS.CORRECT;
-      usedCorrect[i] = true;
-    }
-  }
-
-  // Second pass: mark wrong positions
-  for (let i = 0; i < WORD_LENGTH; i++) {
-    if (results[i] === WORDLE_RESULTS.CORRECT) continue;
-    for (let j = 0; j < WORD_LENGTH; j++) {
-      if (!usedCorrect[j] && g[i] === c[j]) {
+    } else {
+      // Check if letter exists ANYWHERE in the correct word (no used tracking)
+      let found = false;
+      for (let j = 0; j < WORD_LENGTH; j++) {
+        if (c[j] === g[i]) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
         results[i] = WORDLE_RESULTS.WRONG_POSITION;
-        usedCorrect[j] = true;
-        break;
       }
     }
   }
