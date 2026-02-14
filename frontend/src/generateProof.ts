@@ -3,7 +3,6 @@ import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
 import { type CompiledCircuit } from "@noir-lang/types";
 import circuitJson from "./circuit/circuit.json";
-import { GAME_SECRET } from "./config";
 import { wordToAsciiCodes, calculateWordleResults } from "./gameLogic";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 
@@ -138,6 +137,7 @@ async function loadVk(): Promise<Uint8Array> {
  */
 export async function generateProof(
   guess: string,
+  gameSecret: { word: string; letterCodes: number[]; salt: string; commitmentHash: string },
   onStatus?: (msg: string) => void
 ): Promise<ProofArtifacts> {
   const log = onStatus ?? console.log;
@@ -147,7 +147,7 @@ export async function generateProof(
     await preloadProver(log);
   }
 
-  const { word, letterCodes, salt, commitmentHash } = GAME_SECRET;
+  const { word, letterCodes, salt, commitmentHash } = gameSecret;
 
   // Calculate wordle results locally
   const results = calculateWordleResults(guess, word);

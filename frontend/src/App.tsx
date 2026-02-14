@@ -2,9 +2,18 @@ import { useState, useCallback, useEffect } from "react";
 import { WordleGrid } from "./components/WordleGrid";
 import { Keyboard } from "./components/Keyboard";
 import { StatusBar } from "./components/StatusBar";
-import { WORD_LENGTH, MAX_GUESSES, GAME_SECRET, CONTRACT_ID } from "./config";
+import { WORD_LENGTH, MAX_GUESSES, CONTRACT_ID } from "./config";
 import { calculateWordleResults } from "./gameLogic";
 import { useFreighter } from "./hooks/useFreighter";
+import {
+  type GameState,
+  createGame,
+  loadGame,
+  clearGame,
+  saveGuess,
+  markLastVerified,
+  getGameSecret,
+} from "./gameState";
 
 interface Guess {
   word: string;
@@ -13,12 +22,14 @@ interface Guess {
 }
 
 function App() {
+  const [game, setGame] = useState<GameState | null>(null);
   const [guesses, setGuesses] = useState<Guess[]>([]);
   const [currentGuess, setCurrentGuess] = useState("");
   const [status, setStatus] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [proverReady, setProverReady] = useState(false);
+  const [creatingGame, setCreatingGame] = useState(false);
 
   // Freighter wallet integration
   const wallet = useFreighter();
@@ -30,6 +41,40 @@ function App() {
 
   const addStatus = useCallback((msg: string) => {
     setStatus((prev) => [...prev, msg]);
+  }, []);
+
+  // Load existing game on mount
+  useEffect(() => {
+    const saved = loadGame();
+    if (saved) {
+      setGame(saved);
+      // Restore guesses
+      const restored: Guess[] = saved.guesses.map((g) => ({
+        word: g.word,
+        results: g.results,
+        verified: g.verified,
+      }));
+      setGuesses(restored);
+      // Restore letter states
+      const states: Record<string, number | undefined> = {};
+      for (const g of saved.guesses) {
+        for (let i = 0; i < g.word.length; i++) {
+          const letter = g.word[i].toLowerCase();
+          const current = states[letter];
+          if (current === undefined || g.results[i] > current) {
+            states[letter] = g.results[i];
+          }
+        }
+      }
+      setLetterStates(states);
+      // Check if game is already over
+      const lastGuess = saved.guesses[saved.guesses.length - 1];
+      if (lastGuess && lastGuess.results.every((r) => r === 2)) {
+        setGameOver(true);
+      } else if (saved.guesses.length >= MAX_GUESSES) {
+        setGameOver(true);
+      }
+    }
   }, []);
 
   // Pre-load the prover WASM on mount
@@ -57,8 +102,27 @@ function App() {
     });
   };
 
+  const handleNewGame = useCallback(async () => {
+    if (creatingGame) return;
+    setCreatingGame(true);
+    setStatus([]);
+    try {
+      const newGame = await createGame(addStatus);
+      setGame(newGame);
+      setGuesses([]);
+      setCurrentGuess("");
+      setGameOver(false);
+      setLetterStates({});
+      addStatus("Ready to play! Start guessing.");
+    } catch (err: any) {
+      addStatus(`Error creating game: ${err.message ?? err}`);
+    } finally {
+      setCreatingGame(false);
+    }
+  }, [creatingGame, addStatus]);
+
   const handleSubmit = useCallback(async () => {
-    if (busy || gameOver || currentGuess.length !== WORD_LENGTH) return;
+    if (busy || gameOver || currentGuess.length !== WORD_LENGTH || !game) return;
 
     if (!wallet.address) {
       addStatus("⚠️ Please connect your Freighter wallet first.");
@@ -75,7 +139,7 @@ function App() {
 
     try {
       // Calculate results locally first
-      const results = calculateWordleResults(currentGuess, GAME_SECRET.word);
+      const results = calculateWordleResults(currentGuess, game.word);
       addStatus(`Result: ${results.map((r) => (r === 2 ? "🟩" : r === 1 ? "🟨" : "⬛")).join("")}`);
 
       // Add guess with results immediately
@@ -89,17 +153,20 @@ function App() {
       setCurrentGuess("");
       updateLetterStates(savedGuess, results);
 
-      // 1. Generate ZK proof in browser (already preloaded)
+      // Save guess to localStorage
+      saveGuess({ word: savedGuess, results, verified: false });
+
+      // 1. Generate ZK proof in browser
       const { generateProof } = await import("./generateProof");
       const { proof, publicInputsBytes, proofId } = await generateProof(
         savedGuess,
+        getGameSecret(game),
         addStatus
       );
 
       addStatus(`Proof ID: ${proofId.slice(0, 16)}…`);
 
-      // 2. Verify on-chain — deployed contract: verify_proof(public_inputs, proof_bytes)
-      //    VK is already stored on-chain at deploy time.
+      // 2. Verify on-chain
       addStatus("Submitting proof to Stellar testnet…");
       const { verifyProofOnChain } = await import("./soroban");
       const verified = await verifyProofOnChain(
@@ -116,15 +183,16 @@ function App() {
           i === prev.length - 1 ? { ...g, verified } : g
         )
       );
+      markLastVerified(verified);
 
       // Check win/loss
       const won = results.every((r) => r === 2);
       if (won) {
-        addStatus(`🎉 You guessed "${GAME_SECRET.word}" — verified on Stellar!`);
+        addStatus(`🎉 You guessed "${game.word}" — verified on Stellar!`);
         setGameOver(true);
       } else if (guesses.length + 1 >= MAX_GUESSES) {
         addStatus(
-          `Game over. The word was "${GAME_SECRET.word}". Better luck next time!`
+          `Game over. The word was "${game.word}". Better luck next time!`
         );
         setGameOver(true);
       }
@@ -133,7 +201,7 @@ function App() {
     } finally {
       setBusy(false);
     }
-  }, [busy, gameOver, currentGuess, wallet.address, wallet.sign, proverReady, guesses.length, addStatus]);
+  }, [busy, gameOver, currentGuess, game, wallet.address, wallet.sign, proverReady, guesses.length, addStatus]);
 
   const handleKey = useCallback(
     (key: string) => {
@@ -228,15 +296,31 @@ function App() {
         </div>
       )}
 
+      {/* No game — show New Game button */}
+      {!game && (
+        <div className="mb-6 flex flex-col items-center gap-3">
+          <p className="text-gray-400 text-sm">No active game.</p>
+          <button
+            onClick={handleNewGame}
+            disabled={creatingGame}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-lg shadow-lg transition-all"
+          >
+            {creatingGame ? "Creating game…" : "🎲 New Game"}
+          </button>
+        </div>
+      )}
+
       {/* Grid */}
-      <WordleGrid
-        guesses={guesses}
-        currentGuess={currentGuess}
-        maxRows={MAX_GUESSES}
-      />
+      {game && (
+        <WordleGrid
+          guesses={guesses}
+          currentGuess={currentGuess}
+          maxRows={MAX_GUESSES}
+        />
+      )}
 
       {/* Keyboard */}
-      <Keyboard onKey={handleKey} letterStates={letterStates} />
+      {game && <Keyboard onKey={handleKey} letterStates={letterStates} />}
 
       {/* Loading spinner */}
       {busy && (
@@ -266,6 +350,29 @@ function App() {
 
       {/* Status */}
       <StatusBar messages={status} />
+
+      {/* Game Over actions */}
+      {gameOver && game && (
+        <div className="mt-4 flex flex-col items-center gap-3">
+          <p className="text-gray-300 text-sm">
+            The word was: <span className="font-bold text-green-400 text-lg">{game.word.toUpperCase()}</span>
+          </p>
+          <button
+            onClick={() => {
+              clearGame();
+              setGame(null);
+              setGuesses([]);
+              setCurrentGuess("");
+              setGameOver(false);
+              setLetterStates({});
+              setStatus([]);
+            }}
+            className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 rounded-lg shadow-lg transition-all"
+          >
+            🎲 New Game
+          </button>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="mt-6 flex gap-4 text-xs text-gray-500">
