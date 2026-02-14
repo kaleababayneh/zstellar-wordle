@@ -43,7 +43,7 @@ export async function verifyProofOnChain(
   const contract = new StellarSdk.Contract(CONTRACT_ID);
 
   const tx = new StellarSdk.TransactionBuilder(account, {
-    fee: "10000000", // 1 XLM max fee (verification is CPU-expensive)
+    fee: "1000000000", // 100 XLM max fee — ZK verification is extremely heavy
     networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(
@@ -53,7 +53,7 @@ export async function verifyProofOnChain(
         StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
       )
     )
-    .setTimeout(120)
+    .setTimeout(300)
     .build();
 
   log("Simulating transaction…");
@@ -67,10 +67,34 @@ export async function verifyProofOnChain(
     throw new Error(`Simulation failed: ${errMsg}`);
   }
 
-  const preparedTx = StellarSdk.rpc.assembleTransaction(
-    tx,
-    simulated as StellarSdk.rpc.Api.SimulateTransactionSuccessResponse
-  ).build();
+  const simSuccess = simulated as StellarSdk.rpc.Api.SimulateTransactionSuccessResponse;
+
+  // Log simulation resource details
+  const sorobanXdr = simSuccess.transactionData.build();
+  const res = sorobanXdr.resources();
+  const simCpu = res.instructions();
+  log(`Simulation resources:`);
+  log(`  CPU instructions: ${simCpu.toLocaleString()}`);
+  log(`  Disk read bytes: ${res.diskReadBytes().toLocaleString()}`);
+  log(`  Write bytes: ${res.writeBytes().toLocaleString()}`);
+  log(`  Min resource fee: ${simSuccess.minResourceFee}`);
+
+  // The Soroban testnet CPU limit is 400,000,000 instructions.
+  // Simulation overestimates by ~0.1% (safety margin), which pushes us over.
+  // The stellar CLI works because it caps instructions at the network limit.
+  // Actual execution uses fewer instructions than the simulation estimate,
+  // so capping at the limit is safe.
+  const NETWORK_CPU_LIMIT = 400_000_000;
+  if (simCpu > NETWORK_CPU_LIMIT) {
+    log(`⚠️ Capping CPU from ${simCpu.toLocaleString()} → ${NETWORK_CPU_LIMIT.toLocaleString()} (network limit)`);
+    simSuccess.transactionData.setResources(
+      NETWORK_CPU_LIMIT,
+      res.diskReadBytes(),
+      res.writeBytes()
+    );
+  }
+
+  const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simSuccess).build();
 
   // Sign via Freighter wallet extension
   log("Please approve the transaction in Freighter…");
@@ -87,9 +111,42 @@ export async function verifyProofOnChain(
   log("Submitting to Stellar testnet…");
   const response = await server.sendTransaction(signedTx);
 
-  // Poll for result
+  // Check if the network immediately rejected the transaction
+  if (response.status === "ERROR") {
+    // Log diagnostic events for debugging
+    const sendResp = response as StellarSdk.rpc.Api.SendTransactionResponse;
+    if (sendResp.diagnosticEvents && sendResp.diagnosticEvents.length > 0) {
+      log(`⚠️ Diagnostic events (${sendResp.diagnosticEvents.length}):`);
+      for (const evt of sendResp.diagnosticEvents) {
+        try {
+          log(`  ${evt.toXDR("base64")}`);
+        } catch {
+          log(`  (could not serialize event)`);
+        }
+      }
+    }
+    if (sendResp.errorResult) {
+      log(`Error result: ${sendResp.errorResult.toXDR("base64")}`);
+    }
+    throw new Error(
+      `Transaction rejected by network (${(sendResp.errorResult as any)?._attributes?.result?._switch?.name ?? "unknown"})`
+    );
+  }
+  log(`Transaction accepted (status: ${response.status}, hash: ${response.hash})`);
+
+  // Poll for result with progress indicator and timeout
+  const MAX_POLL_ATTEMPTS = 60; // 120 seconds max
   let result = await server.getTransaction(response.hash);
+  let attempts = 0;
   while (result.status === "NOT_FOUND") {
+    if (attempts >= MAX_POLL_ATTEMPTS) {
+      throw new Error(
+        `Transaction not confirmed after ${MAX_POLL_ATTEMPTS * 2}s. ` +
+        `Hash: ${response.hash} — check https://stellar.expert/explorer/testnet/tx/${response.hash}`
+      );
+    }
+    attempts++;
+    log(`Waiting for network to include transaction… (${attempts * 2}s)`);
     await new Promise((r) => setTimeout(r, 2000));
     result = await server.getTransaction(response.hash);
   }
@@ -100,6 +157,18 @@ export async function verifyProofOnChain(
     return true;
   } else {
     log("On-chain verification failed ❌");
+    // Log failure diagnostic events
+    const failResult = result as StellarSdk.rpc.Api.GetFailedTransactionResponse;
+    if (failResult.diagnosticEventsXdr) {
+      log(`Failure diagnostics (${failResult.diagnosticEventsXdr.length} events):`);
+      for (const evt of failResult.diagnosticEventsXdr) {
+        try {
+          log(`  ${evt.toXDR("base64")}`);
+        } catch {
+          log(`  (could not serialize)`);
+        }
+      }
+    }
     return false;
   }
 }
