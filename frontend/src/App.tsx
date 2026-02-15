@@ -138,7 +138,26 @@ function App() {
     setStatus([]);
 
     try {
-      // Calculate results locally first
+      // 0. Validate guess is a real word via Merkle tree
+      const { isValidWord, getMerkleProof, proofToBytes } = await import("./merkleProof");
+      const valid = await isValidWord(currentGuess);
+      if (!valid) {
+        addStatus(`❌ "${currentGuess}" is not in the word list.`);
+        setBusy(false);
+        return;
+      }
+
+      // Generate Merkle proof for the guess word
+      const merkleProof = await getMerkleProof(currentGuess);
+
+      if (!merkleProof) {
+        addStatus(`❌ Could not generate Merkle proof for "${currentGuess}".`);
+        setBusy(false);
+        return;
+      }
+      addStatus(`✅ "${currentGuess}" is a valid word (Merkle proof ready)`);
+
+      // Calculate wordle results locally
       const results = calculateWordleResults(currentGuess, game.word);
       addStatus(`Result: ${results.map((r) => (r === 2 ? "🟩" : r === 1 ? "🟨" : "⬛")).join("")}`);
 
@@ -166,10 +185,15 @@ function App() {
 
       addStatus(`Proof ID: ${proofId.slice(0, 16)}…`);
 
-      // 2. Verify on-chain
-      addStatus("Submitting proof to Stellar testnet…");
-      const { verifyProofOnChain } = await import("./soroban");
-      const verified = await verifyProofOnChain(
+      // 2. Verify on-chain: Merkle word check + ZK proof in one transaction
+      addStatus("Submitting Merkle + ZK proof to Stellar testnet…");
+      const { verifyGuessAndProofOnChain } = await import("./soroban");
+      const { pathElementsBytes, pathIndices, guessWordBytes } = proofToBytes(merkleProof);
+
+      const verified = await verifyGuessAndProofOnChain(
+        guessWordBytes,
+        pathElementsBytes,
+        pathIndices,
         publicInputsBytes,
         proof,
         wallet.address!,

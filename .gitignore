@@ -27,3 +27,5 @@ scripts/measure_ultrahonk_costs/node_modules/
 scripts/invoke_ultrahonk/node_modules/
 frontend-prev
 prev
+
+js-scripts/node_modules/

@@ -8,13 +8,6 @@ export function wordToAsciiCodes(word: string): string[] {
     .map((ch) => ch.charCodeAt(0).toString());
 }
 
-/** Wordle comparison — matches the Noir circuit logic exactly.
- *
- * The circuit does NOT track "used" letters for duplicate handling.
- * It simply checks: exact match → 2, exists anywhere → 1, absent → 0.
- * This differs from standard Wordle rules but must match the circuit
- * to avoid "Cannot satisfy constraint" errors during witness generation.
- */
 export function calculateWordleResults(
   guess: string,
   correct: string

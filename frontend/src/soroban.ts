@@ -172,3 +172,167 @@ export async function verifyProofOnChain(
     return false;
   }
 }
+
+/**
+ * Combined: verify the guess word is in the dictionary AND verify the ZK proof.
+ * Single Soroban transaction calling verify_guess_and_proof.
+ */
+export async function verifyGuessAndProofOnChain(
+  guessWordBytes: Uint8Array,
+  pathElementsBytes: Uint8Array[],
+  pathIndices: number[],
+  publicInputsBytes: Uint8Array,
+  proofBytes: Uint8Array,
+  publicKey: string,
+  signTx: SignTransaction,
+  onStatus?: (msg: string) => void
+): Promise<boolean> {
+  const log = onStatus ?? console.log;
+
+  log("Preparing combined Merkle + ZK verification transaction…");
+  log(`Proof: ${proofBytes.length}B, Public inputs: ${publicInputsBytes.length}B, Merkle path: ${pathElementsBytes.length} elements`);
+
+  const server = getServer();
+  const account = await server.getAccount(publicKey);
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+
+  // Build Soroban Vec<BytesN<32>> for path elements
+  const pathElementsScVal = StellarSdk.xdr.ScVal.scvVec(
+    pathElementsBytes.map((el) =>
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(el))
+    )
+  );
+
+  // Build Soroban Vec<u32> for path indices
+  const pathIndicesScVal = StellarSdk.xdr.ScVal.scvVec(
+    pathIndices.map((idx) =>
+      StellarSdk.nativeToScVal(idx, { type: "u32" })
+    )
+  );
+
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: "1000000000", // 100 XLM max fee
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        "verify_guess_and_proof",
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(guessWordBytes)),
+        pathElementsScVal,
+        pathIndicesScVal,
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
+      )
+    )
+    .setTimeout(300)
+    .build();
+
+  log("Simulating transaction…");
+  const simulated = await server.simulateTransaction(tx);
+
+  if (StellarSdk.rpc.Api.isSimulationError(simulated)) {
+    const errMsg =
+      "error" in simulated
+        ? (simulated as any).error
+        : JSON.stringify(simulated);
+    throw new Error(`Simulation failed: ${errMsg}`);
+  }
+
+  const simSuccess = simulated as StellarSdk.rpc.Api.SimulateTransactionSuccessResponse;
+
+  // Log simulation resource details
+  const sorobanXdr = simSuccess.transactionData.build();
+  const res = sorobanXdr.resources();
+  const simCpu = res.instructions();
+  log(`Simulation resources:`);
+  log(`  CPU instructions: ${simCpu.toLocaleString()}`);
+  log(`  Disk read bytes: ${res.diskReadBytes().toLocaleString()}`);
+  log(`  Write bytes: ${res.writeBytes().toLocaleString()}`);
+  log(`  Min resource fee: ${simSuccess.minResourceFee}`);
+
+  // Cap CPU at network limit (same fix as verify_proof)
+  const NETWORK_CPU_LIMIT = 400_000_000;
+  if (simCpu > NETWORK_CPU_LIMIT) {
+    log(`⚠️ Capping CPU from ${simCpu.toLocaleString()} → ${NETWORK_CPU_LIMIT.toLocaleString()} (network limit)`);
+    simSuccess.transactionData.setResources(
+      NETWORK_CPU_LIMIT,
+      res.diskReadBytes(),
+      res.writeBytes()
+    );
+  }
+
+  const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simSuccess).build();
+
+  log("Please approve the transaction in Freighter…");
+  const signedXdr = await signTx(
+    preparedTx.toXDR(),
+    NETWORK_PASSPHRASE
+  );
+
+  const signedTx = StellarSdk.TransactionBuilder.fromXDR(
+    signedXdr,
+    NETWORK_PASSPHRASE
+  ) as StellarSdk.Transaction;
+
+  log("Submitting to Stellar testnet…");
+  const response = await server.sendTransaction(signedTx);
+
+  if (response.status === "ERROR") {
+    const sendResp = response as StellarSdk.rpc.Api.SendTransactionResponse;
+    if (sendResp.diagnosticEvents && sendResp.diagnosticEvents.length > 0) {
+      log(`⚠️ Diagnostic events (${sendResp.diagnosticEvents.length}):`);
+      for (const evt of sendResp.diagnosticEvents) {
+        try {
+          log(`  ${evt.toXDR("base64")}`);
+        } catch {
+          log(`  (could not serialize event)`);
+        }
+      }
+    }
+    if (sendResp.errorResult) {
+      log(`Error result: ${sendResp.errorResult.toXDR("base64")}`);
+    }
+    throw new Error(
+      `Transaction rejected by network (${(sendResp.errorResult as any)?._attributes?.result?._switch?.name ?? "unknown"})`
+    );
+  }
+  log(`Transaction accepted (status: ${response.status}, hash: ${response.hash})`);
+
+  // Poll for result
+  const MAX_POLL_ATTEMPTS = 60;
+  let result = await server.getTransaction(response.hash);
+  let attempts = 0;
+  while (result.status === "NOT_FOUND") {
+    if (attempts >= MAX_POLL_ATTEMPTS) {
+      throw new Error(
+        `Transaction not confirmed after ${MAX_POLL_ATTEMPTS * 2}s. ` +
+        `Hash: ${response.hash}`
+      );
+    }
+    attempts++;
+    log(`Waiting for network to include transaction… (${attempts * 2}s)`);
+    await new Promise((r) => setTimeout(r, 2000));
+    result = await server.getTransaction(response.hash);
+  }
+
+  if (result.status === "SUCCESS") {
+    log("On-chain Merkle + ZK verification succeeded ✅");
+    log(`Transaction hash: ${response.hash}`);
+    return true;
+  } else {
+    log("On-chain verification failed ❌");
+    const failResult = result as StellarSdk.rpc.Api.GetFailedTransactionResponse;
+    if (failResult.diagnosticEventsXdr) {
+      log(`Failure diagnostics (${failResult.diagnosticEventsXdr.length} events):`);
+      for (const evt of failResult.diagnosticEventsXdr) {
+        try {
+          log(`  ${evt.toXDR("base64")}`);
+        } catch {
+          log(`  (could not serialize)`);
+        }
+      }
+    }
+    return false;
+  }
+}
+
