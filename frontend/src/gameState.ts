@@ -29,6 +29,8 @@ export interface GameState {
     guesses: Array<{ word: string; results: number[]; verified: boolean }>;
     createdAt: number;
     deadline: number; // Unix timestamp (ms) when game expires
+    escrowAmount: number; // Escrow in XLM (0 = no escrow)
+    escrowWithdrawn: boolean;
 }
 
 // ── Poseidon2 via Barretenberg WASM ────────────────────────────────────────────
@@ -103,6 +105,20 @@ export function setGameDeadline(deadline: number): void {
     saveToStorage(state);
 }
 
+export function setGameEscrow(amount: number): void {
+    const state = loadGame();
+    if (!state) return;
+    state.escrowAmount = amount;
+    saveToStorage(state);
+}
+
+export function markEscrowWithdrawn(): void {
+    const state = loadGame();
+    if (!state) return;
+    state.escrowWithdrawn = true;
+    saveToStorage(state);
+}
+
 // ── Game creation ──────────────────────────────────────────────────────────────
 
 /**
@@ -142,6 +158,8 @@ export async function createGame(
         guesses: [],
         createdAt: Date.now(),
         deadline: 0, // Will be set after on-chain create_game
+        escrowAmount: 0, // Will be set if user deposits escrow
+        escrowWithdrawn: false,
     };
 
     saveToStorage(state);

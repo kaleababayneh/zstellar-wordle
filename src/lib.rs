@@ -1,11 +1,20 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, symbol_short, token, Address, Bytes, BytesN, Env,
+    Symbol, Vec,
 };
 use ultrahonk_soroban_verifier::{UltraHonkVerifier, PROOF_BYTES};
 
 /// 5 minutes in ledger seconds
 const GAME_DURATION_SECS: u64 = 300;
+
+/// Keccak256 Merkle root of the 5-letter word dictionary (12 653 words, depth 14).
+const MERKLE_ROOT: [u8; 32] = [
+    0xca, 0x51, 0x82, 0xba, 0xc9, 0xd0, 0xec, 0x16,
+    0xa6, 0x6d, 0x0c, 0x25, 0x21, 0x48, 0x07, 0xa6,
+    0xe3, 0x62, 0x7b, 0xa8, 0x9e, 0x19, 0xd1, 0xc6,
+    0xae, 0x11, 0xce, 0xe1, 0x6e, 0xc4, 0x20, 0xc3,
+];
 
 /// Contract
 #[contract]
@@ -26,6 +35,8 @@ pub enum Error {
     GuessWordMismatch = 9,
     GameExpired = 10,
     NoActiveGame = 11,
+    GameNotWon = 12,
+    NoEscrow = 13,
 }
 
 #[contractimpl]
@@ -34,31 +45,60 @@ impl UltraHonkVerifierContract {
         symbol_short!("vk")
     }
 
-    fn key_merkle_root() -> Symbol {
-        symbol_short!("mk_root")
-    }
-
     fn key_game_deadline(player: &Address) -> (Symbol, Address) {
         (symbol_short!("gm_dead"), player.clone())
     }
 
-    /// Initialize the on-chain VK and Merkle root at deploy time.
-    pub fn __constructor(env: Env, vk_bytes: Bytes, merkle_root: BytesN<32>) -> Result<(), Error> {
+    fn key_escrow_token(player: &Address) -> (Symbol, Address) {
+        (symbol_short!("es_token"), player.clone())
+    }
+
+    fn key_escrow_amount(player: &Address) -> (Symbol, Address) {
+        (symbol_short!("es_amt"), player.clone())
+    }
+
+    fn key_game_won(player: &Address) -> (Symbol, Address) {
+        (symbol_short!("gm_won"), player.clone())
+    }
+
+    /// Initialize the on-chain VK at deploy time.
+    pub fn __constructor(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
-        env.storage()
-            .instance()
-            .set(&Self::key_merkle_root(), &merkle_root);
         Ok(())
     }
 
     /// Start a new game for the caller. Records deadline = now + 5 min.
+    /// If `amount > 0`, transfers tokens from the player to the contract as escrow.
     /// Returns the deadline ledger timestamp (seconds).
-    pub fn create_game(env: Env, player: Address) -> Result<u64, Error> {
+    pub fn create_game(
+        env: Env,
+        player: Address,
+        token_addr: Address,
+        amount: i128,
+    ) -> Result<u64, Error> {
         player.require_auth();
+
+        // Clear any previous win state
+        let won_key = Self::key_game_won(&player);
+        env.storage().temporary().remove(&won_key);
+
+        // Transfer escrow from player to contract if amount > 0
+        if amount > 0 {
+            let token_client = token::TokenClient::new(&env, &token_addr);
+            token_client.transfer(&player, &env.current_contract_address(), &amount);
+
+            let tk = Self::key_escrow_token(&player);
+            env.storage().temporary().set(&tk, &token_addr);
+            env.storage().temporary().extend_ttl(&tk, 500, 500);
+
+            let ak = Self::key_escrow_amount(&player);
+            env.storage().temporary().set(&ak, &amount);
+            env.storage().temporary().extend_ttl(&ak, 500, 500);
+        }
+
         let deadline = env.ledger().timestamp() + GAME_DURATION_SECS;
         let key = Self::key_game_deadline(&player);
         env.storage().temporary().set(&key, &deadline);
-        // Extend TTL well beyond the game duration
         env.storage().temporary().extend_ttl(&key, 500, 500);
         Ok(deadline)
     }
@@ -125,7 +165,61 @@ impl UltraHonkVerifierContract {
 
         // 3. ZK proof — is the wordle result correct?
         Self::do_verify_proof(&env, &public_inputs, &proof_bytes)?;
+
+        // 4. Win detection — check if all 5 result fields are 2 (correct).
+        //    Results start at offset 192 (after commitment + 5 letters).
+        //    Each result is a 32-byte BE field; the value is in the last byte.
+        let mut all_correct = true;
+        for i in 0u32..5 {
+            let offset = 192 + i * 32 + 31;
+            if public_inputs.get(offset).unwrap_or(0) != 2 {
+                all_correct = false;
+                break;
+            }
+        }
+        if all_correct {
+            let won_key = Self::key_game_won(&player);
+            env.storage().temporary().set(&won_key, &true);
+            env.storage().temporary().extend_ttl(&won_key, 500, 500);
+        }
+
         Ok(())
+    }
+
+    /// Withdraw escrowed tokens after winning the game.
+    pub fn withdraw(env: Env, player: Address) -> Result<i128, Error> {
+        player.require_auth();
+
+        let won_key = Self::key_game_won(&player);
+        let won: bool = env.storage().temporary().get(&won_key).unwrap_or(false);
+        if !won {
+            return Err(Error::GameNotWon);
+        }
+
+        let tk = Self::key_escrow_token(&player);
+        let token_addr: Address = env
+            .storage()
+            .temporary()
+            .get(&tk)
+            .ok_or(Error::NoEscrow)?;
+
+        let ak = Self::key_escrow_amount(&player);
+        let amount: i128 = env
+            .storage()
+            .temporary()
+            .get(&ak)
+            .ok_or(Error::NoEscrow)?;
+
+        // Transfer tokens back to the player
+        let token_client = token::TokenClient::new(&env, &token_addr);
+        token_client.transfer(&env.current_contract_address(), &player, &amount);
+
+        // Clean up storage
+        env.storage().temporary().remove(&tk);
+        env.storage().temporary().remove(&ak);
+        env.storage().temporary().remove(&won_key);
+
+        Ok(amount)
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
@@ -199,13 +293,8 @@ impl UltraHonkVerifierContract {
             current_hash = Bytes::from_array(env, &hash_result.to_array());
         }
 
-        // 5. Compare to stored Merkle root
-        let stored_root: BytesN<32> = env
-            .storage()
-            .instance()
-            .get(&Self::key_merkle_root())
-            .ok_or(Error::MerkleRootNotSet)?;
-        let stored_root_bytes = Bytes::from_array(env, &<[u8; 32]>::from(stored_root));
+        // 5. Compare to hardcoded Merkle root
+        let stored_root_bytes = Bytes::from_array(env, &MERKLE_ROOT);
 
         if current_hash != stored_root_bytes {
             return Err(Error::InvalidMerkleProof);

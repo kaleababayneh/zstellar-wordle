@@ -1,5 +1,5 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
-import { CONTRACT_ID, RPC_URL, NETWORK_PASSPHRASE, GAME_DURATION_MS } from "./config";
+import { CONTRACT_ID, RPC_URL, NETWORK_PASSPHRASE, GAME_DURATION_MS, NATIVE_TOKEN_ID, STROOPS_PER_XLM } from "./config";
 import { Buffer } from "buffer";
 
 let _server: StellarSdk.rpc.Server | null = null;
@@ -18,15 +18,20 @@ export type SignTransaction = (
 
 /**
  * Create a game on-chain. Records deadline = ledger_timestamp + 5 min.
+ * If escrowXlm > 0, deposits that amount of native XLM as escrow.
  * Returns the local deadline (Date.now() + 5 min) for UI countdown.
  */
 export async function createGameOnChain(
   publicKey: string,
   signTx: SignTransaction,
+  escrowXlm: number = 0,
   onStatus?: (msg: string) => void
 ): Promise<number> {
   const log = onStatus ?? console.log;
-  log("Registering game timer on-chain (5 min)…");
+  const escrowStroops = BigInt(Math.round(escrowXlm * STROOPS_PER_XLM));
+  log(escrowXlm > 0
+    ? `Registering game on-chain (5 min timer, ${escrowXlm} XLM escrow)…`
+    : "Registering game timer on-chain (5 min)…");
 
   const server = getServer();
   const account = await server.getAccount(publicKey);
@@ -39,7 +44,9 @@ export async function createGameOnChain(
     .addOperation(
       contract.call(
         "create_game",
-        new StellarSdk.Address(publicKey).toScVal()
+        new StellarSdk.Address(publicKey).toScVal(),
+        new StellarSdk.Address(NATIVE_TOKEN_ID).toScVal(),
+        StellarSdk.nativeToScVal(escrowStroops, { type: "i128" })
       )
     )
     .setTimeout(60)
@@ -93,7 +100,87 @@ export async function createGameOnChain(
   // Return local deadline for UI countdown
   const deadline = Date.now() + GAME_DURATION_MS;
   log("Game timer registered on-chain ✅");
+  if (escrowXlm > 0) {
+    log(`Escrow of ${escrowXlm} XLM deposited ✅`);
+  }
   return deadline;
+}
+
+/**
+ * Withdraw escrowed tokens after winning the game.
+ * Calls the contract's `withdraw` function.
+ */
+export async function withdrawEscrow(
+  publicKey: string,
+  signTx: SignTransaction,
+  onStatus?: (msg: string) => void
+): Promise<boolean> {
+  const log = onStatus ?? console.log;
+  log("Withdrawing escrow…");
+
+  const server = getServer();
+  const account = await server.getAccount(publicKey);
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: "10000000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        "withdraw",
+        new StellarSdk.Address(publicKey).toScVal()
+      )
+    )
+    .setTimeout(60)
+    .build();
+
+  log("Simulating withdraw…");
+  const simulated = await server.simulateTransaction(tx);
+
+  if (StellarSdk.rpc.Api.isSimulationError(simulated)) {
+    const errMsg =
+      "error" in simulated
+        ? (simulated as any).error
+        : JSON.stringify(simulated);
+    throw new Error(`Simulation failed: ${errMsg}`);
+  }
+
+  const simSuccess = simulated as StellarSdk.rpc.Api.SimulateTransactionSuccessResponse;
+  const preparedTx = StellarSdk.rpc.assembleTransaction(tx, simSuccess).build();
+
+  log("Please approve the withdrawal in Freighter…");
+  const signedXdr = await signTx(preparedTx.toXDR(), NETWORK_PASSPHRASE);
+
+  const signedTx = StellarSdk.TransactionBuilder.fromXDR(
+    signedXdr,
+    NETWORK_PASSPHRASE
+  ) as StellarSdk.Transaction;
+
+  log("Submitting withdraw to Stellar testnet…");
+  const response = await server.sendTransaction(signedTx);
+
+  if (response.status === "ERROR") {
+    throw new Error("Withdraw transaction rejected by network");
+  }
+
+  let result = await server.getTransaction(response.hash);
+  let attempts = 0;
+  while (result.status === "NOT_FOUND") {
+    if (attempts >= 30) {
+      throw new Error("Withdraw transaction not confirmed in time");
+    }
+    attempts++;
+    await new Promise((r) => setTimeout(r, 2000));
+    result = await server.getTransaction(response.hash);
+  }
+
+  if (result.status !== "SUCCESS") {
+    throw new Error("Withdraw transaction failed on-chain");
+  }
+
+  log("Escrow withdrawn successfully ✅");
+  return true;
 }
 
 /**

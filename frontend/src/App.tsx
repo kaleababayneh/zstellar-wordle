@@ -13,10 +13,12 @@ import {
   saveGuess,
   markLastVerified,
   setGameDeadline,
+  setGameEscrow,
+  markEscrowWithdrawn,
   getGameSecret,
   isWordInList,
 } from "./gameState";
-import { createGameOnChain } from "./soroban";
+import { createGameOnChain, withdrawEscrow } from "./soroban";
 
 interface Guess {
   word: string;
@@ -37,6 +39,9 @@ function App() {
   const [secretWordError, setSecretWordError] = useState("");
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [escrowInput, setEscrowInput] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [gameWon, setGameWon] = useState(false);
 
   // Freighter wallet integration
   const wallet = useFreighter();
@@ -105,6 +110,7 @@ function App() {
       const lastGuess = saved.guesses[saved.guesses.length - 1];
       if (lastGuess && lastGuess.results.every((r) => r === 2)) {
         setGameOver(true);
+        setGameWon(true);
       } else if (saved.guesses.length >= MAX_GUESSES) {
         setGameOver(true);
       } else if (saved.deadline && saved.deadline > 0) {
@@ -158,16 +164,22 @@ function App() {
     try {
       const newGame = await createGame(addStatus, customWord);
 
-      // Register game timer on-chain
+      // Parse escrow amount
+      const escrowXlm = parseFloat(escrowInput) || 0;
+
+      // Register game timer on-chain (+ escrow deposit if > 0)
       const deadline = await createGameOnChain(
         wallet.address!,
         wallet.sign,
+        escrowXlm,
         addStatus
       );
 
-      // Persist deadline in localStorage
+      // Persist deadline + escrow in localStorage
       newGame.deadline = deadline;
+      newGame.escrowAmount = escrowXlm;
       setGameDeadline(deadline);
+      setGameEscrow(escrowXlm);
 
       setGame(newGame);
       setGuesses([]);
@@ -176,7 +188,10 @@ function App() {
       setLetterStates({});
       setTimeLeft(deadline - Date.now());
       startCountdown(deadline);
-      addStatus("Ready to play! You have 5 minutes. Start guessing.");
+      setGameWon(false);
+      addStatus(escrowXlm > 0
+        ? `Ready to play! You have 5 minutes. ${escrowXlm} XLM escrowed.`
+        : "Ready to play! You have 5 minutes. Start guessing.");
     } catch (err: any) {
       addStatus(`Error creating game: ${err.message ?? err}`);
     } finally {
@@ -277,6 +292,10 @@ function App() {
       if (won) {
         addStatus(`🎉 You guessed "${game.word}" — verified on Stellar!`);
         setGameOver(true);
+        setGameWon(true);
+        if (game.escrowAmount > 0) {
+          addStatus(`💰 You can now withdraw your ${game.escrowAmount} XLM escrow!`);
+        }
       } else if (guesses.length + 1 >= MAX_GUESSES) {
         addStatus(
           `Game over. The word was "${game.word}". Better luck next time!`
@@ -409,6 +428,24 @@ function App() {
         <div className="mb-6 flex flex-col items-center gap-4 w-full max-w-sm">
           <p className="text-gray-400 text-sm">No active game.</p>
 
+          {/* Escrow amount */}
+          <div className="flex w-full gap-2 items-center">
+            <label className="text-gray-400 text-sm whitespace-nowrap">💰 Escrow:</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={escrowInput}
+              onChange={(e) => setEscrowInput(e.target.value)}
+              placeholder="0"
+              className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm font-mono text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+            />
+            <span className="text-gray-400 text-sm font-medium">XLM</span>
+          </div>
+          <p className="text-gray-500 text-xs -mt-2">
+            Optional: deposit XLM that you can withdraw after winning.
+          </p>
+
           {/* Set a word for a friend */}
           <div className="flex w-full gap-2">
             <input
@@ -514,6 +551,49 @@ function App() {
           <p className="text-gray-300 text-sm">
             The word was: <span className="font-bold text-green-400 text-lg">{game.word.toUpperCase()}</span>
           </p>
+
+          {/* Escrow info */}
+          {game.escrowAmount > 0 && (
+            <div className={`px-4 py-2 rounded-lg text-sm font-medium ${
+              gameWon && !game.escrowWithdrawn
+                ? "bg-green-900/50 border border-green-600 text-green-300"
+                : game.escrowWithdrawn
+                ? "bg-gray-800 border border-gray-600 text-gray-400"
+                : "bg-red-900/50 border border-red-600 text-red-300"
+            }`}>
+              {game.escrowWithdrawn ? (
+                <span>✅ {game.escrowAmount} XLM withdrawn</span>
+              ) : gameWon ? (
+                <span>💰 {game.escrowAmount} XLM available to withdraw</span>
+              ) : (
+                <span>💸 {game.escrowAmount} XLM escrow forfeited</span>
+              )}
+            </div>
+          )}
+
+          {/* Withdraw button */}
+          {gameWon && game.escrowAmount > 0 && !game.escrowWithdrawn && (
+            <button
+              onClick={async () => {
+                if (withdrawing || !wallet.address) return;
+                setWithdrawing(true);
+                try {
+                  await withdrawEscrow(wallet.address!, wallet.sign, addStatus);
+                  markEscrowWithdrawn();
+                  setGame((prev) => prev ? { ...prev, escrowWithdrawn: true } : prev);
+                } catch (err: any) {
+                  addStatus(`Withdraw error: ${err.message ?? err}`);
+                } finally {
+                  setWithdrawing(false);
+                }
+              }}
+              disabled={withdrawing}
+              className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg shadow-lg transition-all"
+            >
+              {withdrawing ? "Withdrawing…" : `💰 Withdraw ${game.escrowAmount} XLM`}
+            </button>
+          )}
+
           <button
             onClick={() => {
               clearGame();
@@ -524,6 +604,8 @@ function App() {
               setLetterStates({});
               setStatus([]);
               setTimeLeft(null);
+              setGameWon(false);
+              setEscrowInput("");
               if (timerRef.current) clearInterval(timerRef.current);
             }}
             className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 rounded-lg shadow-lg transition-all"
