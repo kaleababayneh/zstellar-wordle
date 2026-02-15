@@ -2,35 +2,64 @@ import { Barretenberg, Fr } from "@aztec/bb.js";
 import { CONTRACT_ID } from "./config";
 import words from "an-array-of-english-words";
 
-
-
-
-let WORDLE = words.filter((w) => 
-    w.length === 5 && 
-    !w.includes("'") && 
-    !w.includes("-") && 
+let WORDLE = words.filter((w) =>
+    w.length === 5 &&
+    !w.includes("'") &&
+    !w.includes("-") &&
     !w.includes(" "));
 
 export const WORD_LIST = WORDLE.map(w => w.toLowerCase());
-console.log(WORD_LIST.length);
 
 /** Check if a word is in the valid 5-letter word list */
 export function isWordInList(word: string): boolean {
     return WORD_LIST.includes(word.toLowerCase());
 }
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+export interface GuessEntry {
+    word: string;
+    results: number[];
+    verified: boolean;
+}
+
+/**
+ * Two-player game state stored in localStorage.
+ * Each player stores their OWN view of the game.
+ */
 export interface GameState {
+    // My identity
+    gameId: string;            // Player 1's address (game identifier)
+    myRole: "p1" | "p2";      // Which player am I?
+    myAddress: string;
+
+    // My secret word
     word: string;
     letterCodes: number[];
     salt: string;
     commitmentHash: string;
+
+    // Opponent info
+    opponentAddress: string;
+
+    // My guesses (against opponent's word) — results filled in when opponent verifies
+    myGuesses: GuessEntry[];
+
+    // Opponent's guesses (against my word) — results computed locally when I verify
+    opponentGuesses: GuessEntry[];
+
+    // Game tracking
     contractId: string;
-    guesses: Array<{ word: string; results: number[]; verified: boolean }>;
     createdAt: number;
-    deadline: number; // Unix timestamp (ms) when game expires
-    escrowAmount: number; // Escrow in XLM (0 = no escrow)
+    escrowAmount: number;
     escrowWithdrawn: boolean;
+
+    // On-chain state (updated via polling)
+    onChainPhase: number;
+    onChainTurn: number;
+    onChainDeadline: number;   // ledger timestamp (seconds)
+    myTimeRemaining: number;   // seconds remaining on my clock
+    opponentTimeRemaining: number;
 }
 
 // ── Poseidon2 via Barretenberg WASM ────────────────────────────────────────────
@@ -47,7 +76,7 @@ async function getBb(): Promise<Barretenberg> {
 /**
  * Compute Poseidon2::hash([salt, l1, l2, l3, l4, l5]) — same as the Noir circuit.
  */
-async function poseidon2Commitment(
+export async function poseidon2Commitment(
     salt: bigint,
     letterCodes: number[]
 ): Promise<string> {
@@ -60,9 +89,21 @@ async function poseidon2Commitment(
     return hash.toString(); // "0x..."
 }
 
+/**
+ * Convert a commitment hash hex string to a 32-byte Uint8Array (big-endian).
+ */
+export function commitmentToBytes(commitmentHash: string): Uint8Array {
+    const hex = commitmentHash.replace(/^0x/, "").padStart(64, "0");
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    }
+    return bytes;
+}
+
 // ── localStorage helpers ───────────────────────────────────────────────────────
 
-const STORAGE_KEY = "zkwordle_game";
+const STORAGE_KEY = "zkwordle_2p_game";
 
 function saveToStorage(state: GameState): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -82,33 +123,48 @@ export function clearGame(): void {
     localStorage.removeItem(STORAGE_KEY);
 }
 
-export function saveGuess(
-    guess: { word: string; results: number[]; verified: boolean }
+export function saveGame(state: GameState): void {
+    saveToStorage(state);
+}
+
+export function addMyGuess(guess: GuessEntry): void {
+    const state = loadGame();
+    if (!state) return;
+    state.myGuesses.push(guess);
+    saveToStorage(state);
+}
+
+export function updateMyGuessResults(guessIndex: number, results: number[]): void {
+    const state = loadGame();
+    if (!state) return;
+    if (guessIndex < state.myGuesses.length) {
+        state.myGuesses[guessIndex].results = results;
+        state.myGuesses[guessIndex].verified = true;
+    }
+    saveToStorage(state);
+}
+
+export function addOpponentGuess(guess: GuessEntry): void {
+    const state = loadGame();
+    if (!state) return;
+    state.opponentGuesses.push(guess);
+    saveToStorage(state);
+}
+
+export function updateOnChainState(
+    phase: number,
+    turn: number,
+    deadline: number,
+    myTime: number,
+    oppTime: number
 ): void {
     const state = loadGame();
     if (!state) return;
-    state.guesses.push(guess);
-    saveToStorage(state);
-}
-
-export function markLastVerified(verified: boolean): void {
-    const state = loadGame();
-    if (!state || state.guesses.length === 0) return;
-    state.guesses[state.guesses.length - 1].verified = verified;
-    saveToStorage(state);
-}
-
-export function setGameDeadline(deadline: number): void {
-    const state = loadGame();
-    if (!state) return;
-    state.deadline = deadline;
-    saveToStorage(state);
-}
-
-export function setGameEscrow(amount: number): void {
-    const state = loadGame();
-    if (!state) return;
-    state.escrowAmount = amount;
+    state.onChainPhase = phase;
+    state.onChainTurn = turn;
+    state.onChainDeadline = deadline;
+    state.myTimeRemaining = myTime;
+    state.opponentTimeRemaining = oppTime;
     saveToStorage(state);
 }
 
@@ -122,19 +178,23 @@ export function markEscrowWithdrawn(): void {
 // ── Game creation ──────────────────────────────────────────────────────────────
 
 /**
- * Create a new game: pick a random word, generate a random salt,
- * compute Poseidon2 commitment, and save to localStorage.
+ * Create local game state for Player 1 or Player 2.
+ * Picks a word, generates salt, computes Poseidon2 commitment.
  */
-export async function createGame(
+export async function createGameState(
+    role: "p1" | "p2",
+    myAddress: string,
+    gameId: string,
+    opponentAddress: string,
+    escrowAmount: number,
     onStatus?: (msg: string) => void,
-    customWord?: string
+    customWord?: string,
 ): Promise<GameState> {
     const log = onStatus ?? console.log;
 
-    // Use custom word if provided, otherwise pick a random one
     const word = customWord ? customWord.toLowerCase() : WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)];
     const letterCodes = word.split("").map((ch) => ch.charCodeAt(0));
-    log(`New game created`);
+    log(`Secret word chosen`);
 
     // Random salt (0–2^64)
     const saltBytes = crypto.getRandomValues(new Uint8Array(8));
@@ -144,22 +204,30 @@ export async function createGame(
     );
     log(`Salt generated`);
 
-    // Compute Poseidon2 commitment
     log(`Computing commitment hash…`);
     const commitmentHash = await poseidon2Commitment(salt, letterCodes);
     log(`Commitment: ${commitmentHash.slice(0, 18)}…`);
 
     const state: GameState = {
+        gameId,
+        myRole: role,
+        myAddress,
         word,
         letterCodes,
         salt: salt.toString(),
         commitmentHash,
+        opponentAddress,
+        myGuesses: [],
+        opponentGuesses: [],
         contractId: CONTRACT_ID,
-        guesses: [],
         createdAt: Date.now(),
-        deadline: 0, // Will be set after on-chain create_game
-        escrowAmount: 0, // Will be set if user deposits escrow
+        escrowAmount,
         escrowWithdrawn: false,
+        onChainPhase: role === "p1" ? 0 : 1,
+        onChainTurn: role === "p1" ? 0 : 1,
+        onChainDeadline: 0,
+        myTimeRemaining: 300,
+        opponentTimeRemaining: 300,
     };
 
     saveToStorage(state);
