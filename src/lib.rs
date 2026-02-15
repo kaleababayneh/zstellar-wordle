@@ -1,8 +1,11 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Symbol, Vec,
 };
 use ultrahonk_soroban_verifier::{UltraHonkVerifier, PROOF_BYTES};
+
+/// 5 minutes in ledger seconds
+const GAME_DURATION_SECS: u64 = 300;
 
 /// Contract
 #[contract]
@@ -21,6 +24,8 @@ pub enum Error {
     InvalidMerkleProof = 7,
     MerkleRootNotSet = 8,
     GuessWordMismatch = 9,
+    GameExpired = 10,
+    NoActiveGame = 11,
 }
 
 #[contractimpl]
@@ -33,6 +38,10 @@ impl UltraHonkVerifierContract {
         symbol_short!("mk_root")
     }
 
+    fn key_game_deadline(player: &Address) -> (Symbol, Address) {
+        (symbol_short!("gm_dead"), player.clone())
+    }
+
     /// Initialize the on-chain VK and Merkle root at deploy time.
     pub fn __constructor(env: Env, vk_bytes: Bytes, merkle_root: BytesN<32>) -> Result<(), Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
@@ -40,6 +49,24 @@ impl UltraHonkVerifierContract {
             .instance()
             .set(&Self::key_merkle_root(), &merkle_root);
         Ok(())
+    }
+
+    /// Start a new game for the caller. Records deadline = now + 5 min.
+    /// Returns the deadline ledger timestamp (seconds).
+    pub fn create_game(env: Env, player: Address) -> Result<u64, Error> {
+        player.require_auth();
+        let deadline = env.ledger().timestamp() + GAME_DURATION_SECS;
+        let key = Self::key_game_deadline(&player);
+        env.storage().temporary().set(&key, &deadline);
+        // Extend TTL well beyond the game duration
+        env.storage().temporary().extend_ttl(&key, 500, 500);
+        Ok(deadline)
+    }
+
+    /// Query the game deadline for a player. Returns 0 if no active game.
+    pub fn get_game_deadline(env: Env, player: Address) -> u64 {
+        let key = Self::key_game_deadline(&player);
+        env.storage().temporary().get(&key).unwrap_or(0)
     }
 
     /// Verify an UltraHonk proof using the stored VK.
@@ -58,14 +85,29 @@ impl UltraHonkVerifierContract {
     }
 
     /// Combined: verify the guess is a valid word AND verify the ZK proof — single transaction.
+    /// Enforces the 5-minute game timer.
     pub fn verify_guess_and_proof(
         env: Env,
+        player: Address,
         guess_word: Bytes,
         path_elements: Vec<BytesN<32>>,
         path_indices: Vec<u32>,
         public_inputs: Bytes,
         proof_bytes: Bytes,
     ) -> Result<(), Error> {
+        player.require_auth();
+
+        // 0. Timer enforcement — check the game is still active
+        let key = Self::key_game_deadline(&player);
+        let deadline: u64 = env
+            .storage()
+            .temporary()
+            .get(&key)
+            .ok_or(Error::NoActiveGame)?;
+        if env.ledger().timestamp() > deadline {
+            return Err(Error::GameExpired);
+        }
+
         // 1. Merkle proof — is this a valid English word?
         Self::do_verify_guess(&env, &guess_word, &path_elements, &path_indices)?;
 

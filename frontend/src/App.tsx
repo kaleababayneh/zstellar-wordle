@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { WordleGrid } from "./components/WordleGrid";
 import { Keyboard } from "./components/Keyboard";
 import { StatusBar } from "./components/StatusBar";
@@ -12,9 +12,11 @@ import {
   clearGame,
   saveGuess,
   markLastVerified,
+  setGameDeadline,
   getGameSecret,
   isWordInList,
 } from "./gameState";
+import { createGameOnChain } from "./soroban";
 
 interface Guess {
   word: string;
@@ -33,6 +35,8 @@ function App() {
   const [creatingGame, setCreatingGame] = useState(false);
   const [secretWord, setSecretWord] = useState("");
   const [secretWordError, setSecretWordError] = useState("");
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Freighter wallet integration
   const wallet = useFreighter();
@@ -44,6 +48,33 @@ function App() {
 
   const addStatus = useCallback((msg: string) => {
     setStatus((prev) => [...prev, msg]);
+  }, []);
+
+  // Format timeLeft (ms) as MM:SS
+  const formatTime = (ms: number): string => {
+    if (ms <= 0) return "00:00";
+    const totalSec = Math.ceil(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  // Start / restart the countdown interval based on a deadline timestamp
+  const startCountdown = useCallback((deadline: number) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    const tick = () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        setTimeLeft(0);
+        setGameOver(true);
+        setStatus((prev) => [...prev, "⏰ Time's up! The 5-minute game timer has expired."]);
+        if (timerRef.current) clearInterval(timerRef.current);
+        return;
+      }
+      setTimeLeft(remaining);
+    };
+    tick();
+    timerRef.current = setInterval(tick, 1000);
   }, []);
 
   // Load existing game on mount
@@ -76,9 +107,20 @@ function App() {
         setGameOver(true);
       } else if (saved.guesses.length >= MAX_GUESSES) {
         setGameOver(true);
+      } else if (saved.deadline && saved.deadline > 0) {
+        // Restore countdown timer
+        if (Date.now() >= saved.deadline) {
+          setGameOver(true);
+          setTimeLeft(0);
+        } else {
+          startCountdown(saved.deadline);
+        }
       }
     }
-  }, []);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [startCountdown]);
 
   // Pre-load the prover WASM on mount
   useEffect(() => {
@@ -107,22 +149,40 @@ function App() {
 
   const handleNewGame = useCallback(async (customWord?: string) => {
     if (creatingGame) return;
+    if (!wallet.address) {
+      addStatus("\u26a0\ufe0f Please connect your Freighter wallet first to start a game.");
+      return;
+    }
     setCreatingGame(true);
     setStatus([]);
     try {
       const newGame = await createGame(addStatus, customWord);
+
+      // Register game timer on-chain
+      const deadline = await createGameOnChain(
+        wallet.address!,
+        wallet.sign,
+        addStatus
+      );
+
+      // Persist deadline in localStorage
+      newGame.deadline = deadline;
+      setGameDeadline(deadline);
+
       setGame(newGame);
       setGuesses([]);
       setCurrentGuess("");
       setGameOver(false);
       setLetterStates({});
-      addStatus("Ready to play! Start guessing.");
+      setTimeLeft(deadline - Date.now());
+      startCountdown(deadline);
+      addStatus("Ready to play! You have 5 minutes. Start guessing.");
     } catch (err: any) {
       addStatus(`Error creating game: ${err.message ?? err}`);
     } finally {
       setCreatingGame(false);
     }
-  }, [creatingGame, addStatus]);
+  }, [creatingGame, addStatus, wallet.address, wallet.sign, startCountdown]);
 
   const handleSubmit = useCallback(async () => {
     if (busy || gameOver || currentGuess.length !== WORD_LENGTH || !game) return;
@@ -298,6 +358,27 @@ function App() {
         Contract: {CONTRACT_ID.slice(0, 12)}…{CONTRACT_ID.slice(-6)}
       </p>
 
+      {/* Countdown Timer */}
+      {game && timeLeft !== null && (
+        <div
+          className={`mb-4 px-5 py-2 rounded-lg text-center font-mono text-lg font-bold ${
+            timeLeft <= 0
+              ? "bg-red-900/70 border border-red-500 text-red-300"
+              : timeLeft <= 60_000
+              ? "bg-red-900/50 border border-red-600 text-red-400 animate-pulse"
+              : timeLeft <= 120_000
+              ? "bg-yellow-900/50 border border-yellow-600 text-yellow-300"
+              : "bg-gray-800 border border-gray-600 text-gray-200"
+          }`}
+        >
+          {timeLeft <= 0 ? (
+            <span>⏰ Time&apos;s up!</span>
+          ) : (
+            <span>⏱ {formatTime(timeLeft)}</span>
+          )}
+        </div>
+      )}
+
       {!proverReady && (
         <div className="mb-4 px-4 py-2 bg-yellow-900/50 border border-yellow-600 rounded text-yellow-300 text-sm flex items-center gap-2">
           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -310,7 +391,7 @@ function App() {
 
       {!wallet.address && (
         <div className="mb-4 px-4 py-2 bg-blue-900/30 border border-blue-600 rounded text-blue-300 text-sm text-center max-w-md">
-          Connect your Freighter wallet to submit guesses on-chain.
+          Connect your Freighter wallet to start a game and submit guesses on-chain.
           <br />
           <a
             href="https://freighter.app"
@@ -442,6 +523,8 @@ function App() {
               setGameOver(false);
               setLetterStates({});
               setStatus([]);
+              setTimeLeft(null);
+              if (timerRef.current) clearInterval(timerRef.current);
             }}
             className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 rounded-lg shadow-lg transition-all"
           >

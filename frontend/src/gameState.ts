@@ -28,6 +28,7 @@ export interface GameState {
     contractId: string;
     guesses: Array<{ word: string; results: number[]; verified: boolean }>;
     createdAt: number;
+    deadline: number; // Unix timestamp (ms) when game expires
 }
 
 // ── Poseidon2 via Barretenberg WASM ────────────────────────────────────────────
@@ -95,6 +96,13 @@ export function markLastVerified(verified: boolean): void {
     saveToStorage(state);
 }
 
+export function setGameDeadline(deadline: number): void {
+    const state = loadGame();
+    if (!state) return;
+    state.deadline = deadline;
+    saveToStorage(state);
+}
+
 // ── Game creation ──────────────────────────────────────────────────────────────
 
 /**
@@ -133,6 +141,7 @@ export async function createGame(
         contractId: CONTRACT_ID,
         guesses: [],
         createdAt: Date.now(),
+        deadline: 0, // Will be set after on-chain create_game
     };
 
     saveToStorage(state);
