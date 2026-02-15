@@ -13,6 +13,7 @@ import {
   saveGuess,
   markLastVerified,
   getGameSecret,
+  isWordInList,
 } from "./gameState";
 
 interface Guess {
@@ -30,6 +31,8 @@ function App() {
   const [gameOver, setGameOver] = useState(false);
   const [proverReady, setProverReady] = useState(false);
   const [creatingGame, setCreatingGame] = useState(false);
+  const [secretWord, setSecretWord] = useState("");
+  const [secretWordError, setSecretWordError] = useState("");
 
   // Freighter wallet integration
   const wallet = useFreighter();
@@ -102,12 +105,12 @@ function App() {
     });
   };
 
-  const handleNewGame = useCallback(async () => {
+  const handleNewGame = useCallback(async (customWord?: string) => {
     if (creatingGame) return;
     setCreatingGame(true);
     setStatus([]);
     try {
-      const newGame = await createGame(addStatus);
+      const newGame = await createGame(addStatus, customWord);
       setGame(newGame);
       setGuesses([]);
       setCurrentGuess("");
@@ -320,16 +323,65 @@ function App() {
         </div>
       )}
 
-      {/* No game — show New Game button */}
+      {/* No game — show Set Word input + Random Word button */}
       {!game && (
-        <div className="mb-6 flex flex-col items-center gap-3">
+        <div className="mb-6 flex flex-col items-center gap-4 w-full max-w-sm">
           <p className="text-gray-400 text-sm">No active game.</p>
+
+          {/* Set a word for a friend */}
+          <div className="flex w-full gap-2">
+            <input
+              type="text"
+              maxLength={WORD_LENGTH}
+              value={secretWord}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase();
+                setSecretWord(val.slice(0, WORD_LENGTH));
+                setSecretWordError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && secretWord.length === WORD_LENGTH) {
+                  if (!isWordInList(secretWord)) {
+                    setSecretWordError(`"${secretWord}" is not a valid word.`);
+                    return;
+                  }
+                  handleNewGame(secretWord);
+                  setSecretWord("");
+                }
+              }}
+              placeholder="Enter a word…"
+              className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm tracking-widest font-mono text-white uppercase placeholder-gray-500 focus:outline-none focus:border-purple-500"
+            />
+            <button
+              onClick={() => {
+                if (secretWord.length !== WORD_LENGTH) {
+                  setSecretWordError(`Must be ${WORD_LENGTH} letters.`);
+                  return;
+                }
+                if (!isWordInList(secretWord)) {
+                  setSecretWordError(`"${secretWord}" is not a valid word.`);
+                  return;
+                }
+                handleNewGame(secretWord);
+                setSecretWord("");
+              }}
+              disabled={creatingGame || secretWord.length !== WORD_LENGTH}
+              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm whitespace-nowrap"
+            >
+              🤝 Set a Word
+            </button>
+          </div>
+          {secretWordError && (
+            <p className="text-red-400 text-xs">{secretWordError}</p>
+          )}
+
+          {/* Or play with a random word */}
           <button
-            onClick={handleNewGame}
+            onClick={() => handleNewGame()}
             disabled={creatingGame}
-            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-lg shadow-lg transition-all"
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-lg shadow-lg transition-all w-full"
           >
-            {creatingGame ? "Creating game…" : "🎲 New Game"}
+            {creatingGame ? "Creating game…" : "🎲 Random Word"}
           </button>
         </div>
       )}

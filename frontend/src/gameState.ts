@@ -11,8 +11,13 @@ let WORDLE = words.filter((w) =>
     !w.includes("-") && 
     !w.includes(" "));
 
-const WORD_LIST = WORDLE.map(w => w.toLowerCase());
+export const WORD_LIST = WORDLE.map(w => w.toLowerCase());
 console.log(WORD_LIST.length);
+
+/** Check if a word is in the valid 5-letter word list */
+export function isWordInList(word: string): boolean {
+    return WORD_LIST.includes(word.toLowerCase());
+}
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface GameState {
@@ -97,12 +102,13 @@ export function markLastVerified(verified: boolean): void {
  * compute Poseidon2 commitment, and save to localStorage.
  */
 export async function createGame(
-    onStatus?: (msg: string) => void
+    onStatus?: (msg: string) => void,
+    customWord?: string
 ): Promise<GameState> {
     const log = onStatus ?? console.log;
 
-    // Pick random word
-    const word = WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)];
+    // Use custom word if provided, otherwise pick a random one
+    const word = customWord ? customWord.toLowerCase() : WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)];
     const letterCodes = word.split("").map((ch) => ch.charCodeAt(0));
     log(`New game created`);
 
