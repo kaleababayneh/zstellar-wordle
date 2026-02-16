@@ -124,6 +124,39 @@ export function clearGame(): void {
     localStorage.removeItem(STORAGE_KEY);
 }
 
+// ── My Games tracking (persistent list of game IDs I've created/joined) ────────
+
+const MY_GAMES_KEY = "zkwordle_my_games";
+
+export interface MyGameEntry {
+    gameId: string;
+    role: "p1" | "p2";
+    createdAt: number;
+}
+
+export function getMyGameEntries(): MyGameEntry[] {
+    try {
+        const raw = localStorage.getItem(MY_GAMES_KEY);
+        if (!raw) return [];
+        return JSON.parse(raw);
+    } catch {
+        return [];
+    }
+}
+
+export function addMyGameEntry(entry: MyGameEntry): void {
+    const list = getMyGameEntries();
+    if (!list.find((e) => e.gameId === entry.gameId)) {
+        list.push(entry);
+        localStorage.setItem(MY_GAMES_KEY, JSON.stringify(list));
+    }
+}
+
+export function removeMyGameEntry(gameId: string): void {
+    const list = getMyGameEntries().filter((e) => e.gameId !== gameId);
+    localStorage.setItem(MY_GAMES_KEY, JSON.stringify(list));
+}
+
 export function saveGame(state: GameState): void {
     saveToStorage(state);
 }

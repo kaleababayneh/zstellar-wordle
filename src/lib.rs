@@ -141,6 +141,20 @@ impl TwoPlayerWordleContract {
         (symbol_short!("p2_word"), game_id.clone())
     }
 
+    // ── Persistent game registry keys ────────────────────────────────────
+
+    fn key_game_count() -> Symbol {
+        symbol_short!("gm_cnt")
+    }
+
+    fn key_game_at(index: u32) -> (Symbol, u32) {
+        (symbol_short!("gm_at"), index)
+    }
+
+    fn key_game_creator(game_id: &Address) -> (Symbol, Address) {
+        (symbol_short!("gm_crea"), game_id.clone())
+    }
+
     /// Initialize the on-chain VK at deploy time.
     pub fn __constructor(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
@@ -148,9 +162,10 @@ impl TwoPlayerWordleContract {
     }
 
     /// Player 1 creates a new game with their commitment and escrow.
-    /// game_id = player1's address
+    /// game_id is a unique identifier (e.g. a randomly generated address).
     pub fn create_game(
         env: Env,
+        game_id: Address,
         player1: Address,
         commitment1: BytesN<32>,
         token_addr: Address,
@@ -158,27 +173,10 @@ impl TwoPlayerWordleContract {
     ) -> Result<(), Error> {
         player1.require_auth();
 
-        // Check if game already exists — allow overwrite if still in WAITING phase
-        let phase_key = Self::key_game_phase(&player1);
+        // Check if game already exists
+        let phase_key = Self::key_game_phase(&game_id);
         if env.storage().temporary().has(&phase_key) {
-            let existing_phase: u32 = env
-                .storage()
-                .temporary()
-                .get(&phase_key)
-                .unwrap_or(255);
-            if existing_phase != PHASE_WAITING {
-                return Err(Error::GameAlreadyExists);
-            }
-            // WAITING phase: refund old escrow before overwriting
-            let old_amt_key = Self::key_escrow_amount(&player1);
-            let old_amount: i128 = env.storage().temporary().get(&old_amt_key).unwrap_or(0);
-            if old_amount > 0 {
-                let old_token_key = Self::key_escrow_token(&player1);
-                if let Some(old_token_addr) = env.storage().temporary().get::<_, Address>(&old_token_key) {
-                    let old_token_client = token::TokenClient::new(&env, &old_token_addr);
-                    old_token_client.transfer(&env.current_contract_address(), &player1, &old_amount);
-                }
-            }
+            return Err(Error::GameAlreadyExists);
         }
 
         // Transfer escrow from player1 to contract
@@ -187,29 +185,41 @@ impl TwoPlayerWordleContract {
             token_client.transfer(&player1, &env.current_contract_address(), &amount);
         }
 
-        // Store game state
+        // Store game state (keyed by game_id, not player1)
         env.storage().temporary().set(&phase_key, &PHASE_WAITING);
         env.storage().temporary().extend_ttl(&phase_key, 5000, 5000);
 
-        let p1_key = Self::key_game_p1(&player1);
+        let p1_key = Self::key_game_p1(&game_id);
         env.storage().temporary().set(&p1_key, &player1);
         env.storage().temporary().extend_ttl(&p1_key, 5000, 5000);
 
-        let c1_key = Self::key_game_c1(&player1);
+        let c1_key = Self::key_game_c1(&game_id);
         env.storage().temporary().set(&c1_key, &commitment1);
         env.storage().temporary().extend_ttl(&c1_key, 5000, 5000);
 
-        let token_key = Self::key_escrow_token(&player1);
+        let token_key = Self::key_escrow_token(&game_id);
         env.storage().temporary().set(&token_key, &token_addr);
         env.storage().temporary().extend_ttl(&token_key, 5000, 5000);
 
-        let amt_key = Self::key_escrow_amount(&player1);
+        let amt_key = Self::key_escrow_amount(&game_id);
         env.storage().temporary().set(&amt_key, &amount);
         env.storage().temporary().extend_ttl(&amt_key, 5000, 5000);
 
+        // Add to persistent game registry
+        let count_key = Self::key_game_count();
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        let at_key = Self::key_game_at(count);
+        env.storage().persistent().set(&at_key, &game_id);
+        env.storage().persistent().extend_ttl(&at_key, 20000, 20000);
+        let creator_key = Self::key_game_creator(&game_id);
+        env.storage().persistent().set(&creator_key, &player1);
+        env.storage().persistent().extend_ttl(&creator_key, 20000, 20000);
+        env.storage().persistent().set(&count_key, &(count + 1));
+        env.storage().persistent().extend_ttl(&count_key, 20000, 20000);
+
         // Emit event so the lobby can discover open games
         env.events()
-            .publish((symbol_short!("created"),), player1.clone());
+            .publish((symbol_short!("created"),), (game_id.clone(), player1.clone()));
 
         Ok(())
     }
@@ -1065,6 +1075,22 @@ impl TwoPlayerWordleContract {
     pub fn get_p2_word(env: Env, game_id: Address) -> Bytes {
         let key = Self::key_p2_word(&game_id);
         env.storage().temporary().get(&key).unwrap_or(Bytes::new(&env))
+    }
+
+    // ── Game registry queries (persistent storage) ───────────────────────
+
+    pub fn get_game_count(env: Env) -> u32 {
+        env.storage().persistent().get(&Self::key_game_count()).unwrap_or(0)
+    }
+
+    pub fn get_game_id_at(env: Env, index: u32) -> Address {
+        let key = Self::key_game_at(index);
+        env.storage().persistent().get(&key).unwrap_or(env.current_contract_address())
+    }
+
+    pub fn get_game_creator(env: Env, game_id: Address) -> Address {
+        let key = Self::key_game_creator(&game_id);
+        env.storage().persistent().get(&key).unwrap_or(game_id)
     }
 
     // ── Private helpers ──────────────────────────────────────────────────

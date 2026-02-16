@@ -6,6 +6,7 @@ import { Lobby } from "./components/Lobby";
 import { WORD_LENGTH, MAX_GUESSES, CONTRACT_ID, PHASE, POLL_INTERVAL_MS } from "./config";
 import { calculateWordleResults } from "./gameLogic";
 import { useFreighter } from "./hooks/useFreighter";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import {
   type GameState,
   type GuessEntry,
@@ -19,8 +20,8 @@ import {
   markEscrowWithdrawn,
   markDrawRevealed,
   getGameSecret,
-  isWordInList,
   commitmentToBytes,
+  addMyGameEntry,
 } from "./gameState";
 import {
   createGameOnChain,
@@ -40,14 +41,10 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [proverReady, setProverReady] = useState(false);
-  const [secretWord, setSecretWord] = useState("");
-  const [secretWordError, setSecretWordError] = useState("");
-  const [escrowInput, setEscrowInput] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
   const [gameWon, setGameWon] = useState(false);
 
   // Two-player state
-  const [joinGameId, setJoinGameId] = useState("");
   const [myTimeLeft, setMyTimeLeft] = useState<number | null>(null);
   const [oppTimeLeft, setOppTimeLeft] = useState<number | null>(null);
   const [isMyTurn, setIsMyTurn] = useState(false);
@@ -247,14 +244,7 @@ function App() {
       }
       setLetterStates(states);
     } else {
-      // Check URL for ?game=GAME_ID
-      const params = new URLSearchParams(window.location.search);
-      const gameParam = params.get("game");
-      if (gameParam) {
-        setJoinGameId(gameParam.trim());
-        // Clean URL without reload
-        window.history.replaceState({}, "", window.location.pathname);
-      }
+      // URL ?game=GAME_ID is handled by the Lobby component
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -289,18 +279,21 @@ function App() {
 
   // ── Create Game (Player 1) ────────────────────────────────────────────
 
-  const handleCreateGame = useCallback(async (customWord?: string) => {
+  const handleCreateGame = useCallback(async (escrowXlm: number, customWord?: string) => {
     if (creatingGame || !wallet.address) return;
     setCreatingGame(true);
     setStatus([]);
     try {
-      const escrowXlm = parseFloat(escrowInput) || 0;
+      // Generate a unique game ID (random Stellar keypair address)
+      const gameKeypair = StellarSdk.Keypair.random();
+      const gameId = gameKeypair.publicKey();
+      addStatus(`Game ID: ${gameId.slice(0, 12)}…`);
 
       // Create local game state
       const newGame = await createGameState(
         "p1",
         wallet.address,
-        wallet.address, // game_id = player1's address
+        gameId,
         "",             // opponent unknown yet
         escrowXlm,
         addStatus,
@@ -310,12 +303,16 @@ function App() {
       // Register on-chain
       const commitBytes = commitmentToBytes(newGame.commitmentHash);
       await createGameOnChain(
+        gameId,
         wallet.address,
         wallet.sign,
         commitBytes,
         escrowXlm,
         addStatus
       );
+
+      // Track in my games
+      addMyGameEntry({ gameId, role: "p1", createdAt: Date.now() });
 
       setGame(newGame);
       setOnChainPhase(PHASE.WAITING);
@@ -326,25 +323,25 @@ function App() {
       setGameWon(false);
 
       addStatus(`Game created! Share your Game ID with your opponent:`);
-      addStatus(`Game ID: ${wallet.address}`);
+      addStatus(`Game ID: ${gameId}`);
       addStatus("Waiting for Player 2 to join…");
     } catch (err: any) {
       addStatus(`Error: ${err.message ?? err}`);
     } finally {
       setCreatingGame(false);
     }
-  }, [creatingGame, wallet.address, wallet.sign, addStatus, escrowInput]);
+  }, [creatingGame, wallet.address, wallet.sign, addStatus]);
 
   // ── Join Game (Player 2) ──────────────────────────────────────────────
 
-  const handleJoinGame = useCallback(async (customWord?: string) => {
-    if (creatingGame || !wallet.address || !joinGameId) return;
+  const handleJoinGame = useCallback(async (joinId: string, customWord?: string) => {
+    if (creatingGame || !wallet.address || !joinId) return;
     setCreatingGame(true);
     setStatus([]);
     try {
-      const gameId = joinGameId.trim();
+      const gameId = joinId.trim();
 
-      // Query escrow amount first
+      // Query escrow amount and creator
       const chain = await queryGameState(gameId);
       if (chain.phase !== PHASE.WAITING) {
         addStatus("Game is not in waiting state — cannot join.");
@@ -354,12 +351,17 @@ function App() {
 
       const escrowXlm = Number(chain.escrowAmount) / 10_000_000;
 
+      // Get creator (player1) address from on-chain
+      const { getGameCreator } = await import("./soroban");
+      const creatorAddr = await getGameCreator(gameId);
+      const opponentAddr = creatorAddr || gameId; // fallback for old-style games
+
       // Create local game state
       const newGame = await createGameState(
         "p2",
         wallet.address,
         gameId,
-        gameId, // opponent = player1 = game_id
+        opponentAddr,
         escrowXlm,
         addStatus,
         customWord
@@ -374,6 +376,9 @@ function App() {
         commitBytes,
         addStatus
       );
+
+      // Track in my games
+      addMyGameEntry({ gameId, role: "p2", createdAt: Date.now() });
 
       setGame(newGame);
       setOnChainPhase(PHASE.ACTIVE);
@@ -390,7 +395,7 @@ function App() {
     } finally {
       setCreatingGame(false);
     }
-  }, [creatingGame, wallet.address, wallet.sign, joinGameId, addStatus]);
+  }, [creatingGame, wallet.address, wallet.sign, addStatus]);
 
   // ── Submit Turn ───────────────────────────────────────────────────────
 
@@ -795,132 +800,21 @@ function App() {
         </div>
       )}
 
-      {/* ── No Game: Create or Join ──────────────────────────────────── */}
+      {/* ── No Game: Game Lobby ──────────────────────────────────────── */}
       {!game && wallet.address && (
-        <div className="mb-6 flex flex-col items-center gap-4 w-full max-w-lg">
-          {/* Game Lobby */}
+        <div className="mb-6 flex flex-col items-center w-full">
           <Lobby
             currentAddress={wallet.address}
-            onJoinGame={(gameId) => setJoinGameId(gameId)}
+            onJoinGame={(gameId) => handleJoinGame(gameId)}
+            onCreateGame={(escrow, word) => handleCreateGame(escrow, word)}
+            onResumeGame={() => {
+              const saved = loadGame();
+              if (saved) {
+                setGame(saved);
+                setStatus([]);
+              }
+            }}
           />
-
-          <div className="text-gray-500 text-sm">— or create a new game —</div>
-
-          <div className="w-full bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <h2 className="text-lg font-bold mb-3">Create Game (Player 1)</h2>
-
-            {/* Escrow */}
-            <div className="flex w-full gap-2 items-center mb-2">
-              <label className="text-gray-400 text-sm whitespace-nowrap">Escrow:</label>
-              <input
-                type="number" min="0" step="any"
-                value={escrowInput}
-                onChange={(e) => setEscrowInput(e.target.value)}
-                placeholder="0"
-                className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-white"
-              />
-              <span className="text-gray-400 text-sm">XLM</span>
-            </div>
-
-            {/* Secret word */}
-            <div className="flex w-full gap-2 mb-2">
-              <input
-                type="text" maxLength={WORD_LENGTH}
-                value={secretWord}
-                onChange={(e) => {
-                  setSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
-                  setSecretWordError("");
-                }}
-                placeholder="Your secret word…"
-                className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm tracking-widest font-mono uppercase"
-              />
-              <button
-                onClick={() => {
-                  if (secretWord.length !== WORD_LENGTH) {
-                    setSecretWordError(`Must be ${WORD_LENGTH} letters.`);
-                    return;
-                  }
-                  if (!isWordInList(secretWord)) {
-                    setSecretWordError(`"${secretWord}" is not a valid word.`);
-                    return;
-                  }
-                  handleCreateGame(secretWord);
-                  setSecretWord("");
-                }}
-                disabled={creatingGame || secretWord.length !== WORD_LENGTH}
-                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded text-sm"
-              >
-                Set Word
-              </button>
-            </div>
-            {secretWordError && <p className="text-red-400 text-xs mb-2">{secretWordError}</p>}
-
-            <button
-              onClick={() => handleCreateGame()}
-              disabled={creatingGame}
-              className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-6 py-2 rounded text-sm w-full"
-            >
-              {creatingGame ? "Creating…" : "Random Word"}
-            </button>
-          </div>
-
-          <div className="text-gray-500 text-sm">— or —</div>
-
-          <div className="w-full bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <h2 className="text-lg font-bold mb-3">Join Game (Player 2)</h2>
-
-            {/* Game ID input */}
-            <div className="flex w-full gap-2 mb-2">
-              <input
-                type="text"
-                value={joinGameId}
-                onChange={(e) => setJoinGameId(e.target.value.trim())}
-                placeholder="Paste Game ID (Player 1's address)"
-                className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono"
-              />
-            </div>
-
-            {/* P2 secret word */}
-            <div className="flex w-full gap-2 mb-2">
-              <input
-                type="text" maxLength={WORD_LENGTH}
-                value={secretWord}
-                onChange={(e) => {
-                  setSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
-                  setSecretWordError("");
-                }}
-                placeholder="Your secret word…"
-                className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm tracking-widest font-mono uppercase"
-              />
-              <button
-                onClick={() => {
-                  if (secretWord.length !== WORD_LENGTH) {
-                    setSecretWordError(`Must be ${WORD_LENGTH} letters.`);
-                    return;
-                  }
-                  if (!isWordInList(secretWord)) {
-                    setSecretWordError(`"${secretWord}" is not valid.`);
-                    return;
-                  }
-                  handleJoinGame(secretWord);
-                  setSecretWord("");
-                }}
-                disabled={creatingGame || !joinGameId || secretWord.length !== WORD_LENGTH}
-                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded text-sm"
-              >
-                Set Word
-              </button>
-            </div>
-            {secretWordError && <p className="text-red-400 text-xs mb-2">{secretWordError}</p>}
-
-            <button
-              onClick={() => handleJoinGame()}
-              disabled={creatingGame || !joinGameId}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-6 py-2 rounded text-sm w-full"
-            >
-              {creatingGame ? "Joining…" : "Join with Random Word"}
-            </button>
-          </div>
         </div>
       )}
 
@@ -1220,7 +1114,6 @@ function App() {
               setMyTimeLeft(null);
               setOppTimeLeft(null);
               setGameWon(false);
-              setEscrowInput("");
               setOnChainPhase(PHASE.NONE);
               setChainTurn(0);
               setWinner("");
@@ -1290,7 +1183,6 @@ function App() {
               setMyTimeLeft(null);
               setOppTimeLeft(null);
               setGameWon(false);
-              setEscrowInput("");
               setOnChainPhase(PHASE.NONE);
               setChainTurn(0);
               setWinner("");
