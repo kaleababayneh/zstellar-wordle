@@ -34,7 +34,7 @@ export const WordleGrid = memo(function WordleGrid({
     }
   };
 
-  const rows: JSX.Element[] = [];
+  const rows: any[] = [];
 
   // Submitted guesses
   for (let i = 0; i < guesses.length && i < maxRows; i++) {

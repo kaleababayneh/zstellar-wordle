@@ -53,6 +53,7 @@ export interface GameState {
     createdAt: number;
     escrowAmount: number;
     escrowWithdrawn: boolean;
+    drawRevealed: boolean;  // Whether I have revealed my word in a draw
 
     // On-chain state (updated via polling)
     onChainPhase: number;
@@ -175,6 +176,13 @@ export function markEscrowWithdrawn(): void {
     saveToStorage(state);
 }
 
+export function markDrawRevealed(): void {
+    const state = loadGame();
+    if (!state) return;
+    state.drawRevealed = true;
+    saveToStorage(state);
+}
+
 // ── Game creation ──────────────────────────────────────────────────────────────
 
 /**
@@ -223,6 +231,7 @@ export async function createGameState(
         createdAt: Date.now(),
         escrowAmount,
         escrowWithdrawn: false,
+        drawRevealed: false,
         onChainPhase: role === "p1" ? 0 : 1,
         onChainTurn: role === "p1" ? 0 : 1,
         onChainDeadline: 0,

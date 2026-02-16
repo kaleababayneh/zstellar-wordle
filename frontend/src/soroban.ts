@@ -150,10 +150,14 @@ export async function queryGameState(gameId: string): Promise<{
   lastResults: number[];
   winner: string;
   escrowAmount: number;
+  p1Revealed: boolean;
+  p2Revealed: boolean;
+  p1Word: string;
+  p2Word: string;
 }> {
   const gameIdScVal = new StellarSdk.Address(gameId).toScVal();
 
-  const [phaseVal, turnVal, deadlineVal, p1TimeVal, p2TimeVal, guessVal, resultsVal, winnerVal, escrowVal] =
+  const [phaseVal, turnVal, deadlineVal, p1TimeVal, p2TimeVal, guessVal, resultsVal, winnerVal, escrowVal, p1RevVal, p2RevVal, p1WordVal, p2WordVal] =
     await Promise.all([
       queryContract("get_game_phase", [gameIdScVal]),
       queryContract("get_game_turn", [gameIdScVal]),
@@ -164,6 +168,10 @@ export async function queryGameState(gameId: string): Promise<{
       queryContract("get_last_results", [gameIdScVal]),
       queryContract("get_winner", [gameIdScVal]),
       queryContract("get_escrow_amount", [gameIdScVal]),
+      queryContract("get_p1_revealed", [gameIdScVal]),
+      queryContract("get_p2_revealed", [gameIdScVal]),
+      queryContract("get_p1_word", [gameIdScVal]),
+      queryContract("get_p2_word", [gameIdScVal]),
     ]);
 
   const phase = phaseVal ? phaseVal.value() as number : 255;
@@ -209,7 +217,25 @@ export async function queryGameState(gameId: string): Promise<{
     } catch { /* empty */ }
   }
 
-  return { phase, turn, deadline, p1Time, p2Time, lastGuess, lastResults, winner, escrowAmount };
+  const p1Revealed = p1RevVal ? Boolean(p1RevVal.value()) : false;
+  const p2Revealed = p2RevVal ? Boolean(p2RevVal.value()) : false;
+
+  let p1Word = "";
+  if (p1WordVal) {
+    try {
+      const wb = p1WordVal.value() as Buffer;
+      if (wb && wb.length === 5) p1Word = String.fromCharCode(...Array.from(wb));
+    } catch { /* empty */ }
+  }
+  let p2Word = "";
+  if (p2WordVal) {
+    try {
+      const wb = p2WordVal.value() as Buffer;
+      if (wb && wb.length === 5) p2Word = String.fromCharCode(...Array.from(wb));
+    } catch { /* empty */ }
+  }
+
+  return { phase, turn, deadline, p1Time, p2Time, lastGuess, lastResults, winner, escrowAmount, p1Revealed, p2Revealed, p1Word, p2Word };
 }
 
 // ── Create Game (Player 1) ─────────────────────────────────────────────
@@ -396,6 +422,61 @@ export async function revealWordOnChain(
   );
 
   log("Word revealed ✅");
+}
+
+// ── Reveal Word (Draw) ─────────────────────────────────────────────────
+
+/**
+ * In a draw, each player reveals their word: ZK proof (guessing own word) + Merkle proof.
+ * Must reveal before being allowed to withdraw.
+ */
+export async function revealWordDrawOnChain(
+  gameId: string,
+  publicKey: string,
+  signTx: SignTransaction,
+  revealWordBytes: Uint8Array,
+  pathElementsBytes: Uint8Array[],
+  pathIndices: number[],
+  publicInputsBytes: Uint8Array,
+  proofBytes: Uint8Array,
+  onStatus?: (msg: string) => void
+): Promise<void> {
+  const log = onStatus ?? console.log;
+  log("Revealing word for draw on-chain…");
+
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+
+  const pathElementsScVal = StellarSdk.xdr.ScVal.scvVec(
+    pathElementsBytes.map((el) =>
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(el))
+    )
+  );
+
+  const pathIndicesScVal = StellarSdk.xdr.ScVal.scvVec(
+    pathIndices.map((idx) =>
+      StellarSdk.nativeToScVal(idx, { type: "u32" })
+    )
+  );
+
+  await buildSignSubmit(
+    publicKey,
+    signTx,
+    contract.call(
+      "reveal_word_draw",
+      new StellarSdk.Address(gameId).toScVal(),
+      new StellarSdk.Address(publicKey).toScVal(),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(revealWordBytes)),
+      pathElementsScVal,
+      pathIndicesScVal,
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
+    ),
+    "1000000000", // 100 XLM max fee (ZK proof)
+    log,
+    true
+  );
+
+  log("Word revealed for draw ✅");
 }
 
 // ── Claim Timeout ──────────────────────────────────────────────────────

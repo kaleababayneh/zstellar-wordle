@@ -125,6 +125,22 @@ impl TwoPlayerWordleContract {
         (symbol_short!("p2_time"), game_id.clone())
     }
 
+    fn key_p1_revealed(game_id: &Address) -> (Symbol, Address) {
+        (symbol_short!("p1_rev"), game_id.clone())
+    }
+
+    fn key_p2_revealed(game_id: &Address) -> (Symbol, Address) {
+        (symbol_short!("p2_rev"), game_id.clone())
+    }
+
+    fn key_p1_word(game_id: &Address) -> (Symbol, Address) {
+        (symbol_short!("p1_word"), game_id.clone())
+    }
+
+    fn key_p2_word(game_id: &Address) -> (Symbol, Address) {
+        (symbol_short!("p2_word"), game_id.clone())
+    }
+
     /// Initialize the on-chain VK at deploy time.
     pub fn __constructor(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
@@ -426,7 +442,21 @@ impl TwoPlayerWordleContract {
         // Turn 13 (verify-only): no new guess, check for draw
         if turn == MAX_TURNS {
             // All turns exhausted, no winner → draw
+            // Both players must reveal their words before withdrawing
             env.storage().temporary().set(&phase_key, &PHASE_DRAW);
+
+            // Set a deadline for both players to reveal their words
+            let draw_deadline = env.ledger().timestamp() + TURN_DURATION_SECS;
+            env.storage().temporary().set(&dead_key, &draw_deadline);
+
+            // Reset revealed flags
+            let p1_rev_key = Self::key_p1_revealed(&game_id);
+            env.storage().temporary().set(&p1_rev_key, &false);
+            env.storage().temporary().extend_ttl(&p1_rev_key, 5000, 5000);
+            let p2_rev_key = Self::key_p2_revealed(&game_id);
+            env.storage().temporary().set(&p2_rev_key, &false);
+            env.storage().temporary().extend_ttl(&p2_rev_key, 5000, 5000);
+
             return Ok(());
         }
 
@@ -594,6 +624,139 @@ impl TwoPlayerWordleContract {
         Ok(())
     }
 
+    /// In a draw, each player reveals their word to prove it's valid.
+    /// If the word is invalid (bad Merkle proof), the OTHER player gets the full pot.
+    pub fn reveal_word_draw(
+        env: Env,
+        game_id: Address,
+        caller: Address,
+        reveal_word: Bytes,
+        path_elements: Vec<BytesN<32>>,
+        path_indices: Vec<u32>,
+        public_inputs: Bytes,
+        proof_bytes: Bytes,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        // Check game is in draw phase
+        let phase_key = Self::key_game_phase(&game_id);
+        let phase: u32 = env
+            .storage()
+            .temporary()
+            .get(&phase_key)
+            .ok_or(Error::NoActiveGame)?;
+        if phase != PHASE_DRAW {
+            return Err(Error::WrongPhase);
+        }
+
+        // Caller must be p1 or p2
+        let p1_key = Self::key_game_p1(&game_id);
+        let player1: Address = env
+            .storage()
+            .temporary()
+            .get(&p1_key)
+            .ok_or(Error::NoActiveGame)?;
+        let p2_key = Self::key_game_p2(&game_id);
+        let player2: Address = env
+            .storage()
+            .temporary()
+            .get(&p2_key)
+            .ok_or(Error::NoActiveGame)?;
+
+        let is_p1 = caller == player1;
+        let is_p2 = caller == player2;
+        if !is_p1 && !is_p2 {
+            return Err(Error::WrongPlayer);
+        }
+
+        // Check not already revealed
+        let rev_key = if is_p1 {
+            Self::key_p1_revealed(&game_id)
+        } else {
+            Self::key_p2_revealed(&game_id)
+        };
+        let already_revealed: bool = env.storage().temporary().get(&rev_key).unwrap_or(false);
+        if already_revealed {
+            return Err(Error::AlreadyWithdrawn); // reuse error: already done
+        }
+
+        // Get caller's stored commitment
+        let my_commitment: BytesN<32> = if is_p1 {
+            let c1_key = Self::key_game_c1(&game_id);
+            env.storage()
+                .temporary()
+                .get(&c1_key)
+                .ok_or(Error::NoActiveGame)?
+        } else {
+            let c2_key = Self::key_game_c2(&game_id);
+            env.storage()
+                .temporary()
+                .get(&c2_key)
+                .ok_or(Error::NoActiveGame)?
+        };
+
+        // Extract commitment from public_inputs and verify it matches stored
+        let mut commitment_from_proof = [0u8; 32];
+        for i in 0..32usize {
+            commitment_from_proof[i] = public_inputs.get(i as u32).unwrap_or(0);
+        }
+        let commitment_from_proof_bytes = BytesN::from_array(&env, &commitment_from_proof);
+        if my_commitment != commitment_from_proof_bytes {
+            return Err(Error::InvalidReveal);
+        }
+
+        // Verify the revealed word letters match public_inputs
+        if reveal_word.len() != 5 {
+            return Err(Error::InvalidGuessLength);
+        }
+        for i in 0u32..5 {
+            let field_offset = 32 + i * 32;
+            let letter_byte = public_inputs.get(field_offset + 31).unwrap_or(0);
+            let word_byte = reveal_word.get(i).unwrap();
+            if letter_byte != word_byte {
+                return Err(Error::InvalidReveal);
+            }
+        }
+
+        // All results must be 2 (player guessed their own word correctly)
+        for i in 0u32..5 {
+            let offset = 192 + i * 32 + 31;
+            if public_inputs.get(offset).unwrap_or(0) != 2 {
+                return Err(Error::InvalidReveal);
+            }
+        }
+
+        // Verify ZK proof
+        Self::do_verify_proof(&env, &public_inputs, &proof_bytes)?;
+
+        // Verify Merkle proof: is the word in the dictionary?
+        let merkle_result =
+            Self::do_verify_guess(&env, &reveal_word, &path_elements, &path_indices);
+
+        if merkle_result.is_ok() {
+            // Word is valid — mark as revealed and store the word
+            env.storage().temporary().set(&rev_key, &true);
+            env.storage().temporary().extend_ttl(&rev_key, 5000, 5000);
+
+            let word_key = if is_p1 {
+                Self::key_p1_word(&game_id)
+            } else {
+                Self::key_p2_word(&game_id)
+            };
+            env.storage().temporary().set(&word_key, &reveal_word);
+            env.storage().temporary().extend_ttl(&word_key, 5000, 5000);
+        } else {
+            // Word NOT in dictionary — cheater! Other player gets everything.
+            let other_player = if is_p1 { player2 } else { player1 };
+            let win_key = Self::key_game_winner(&game_id);
+            env.storage().temporary().set(&win_key, &other_player);
+            env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
+            env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
+        }
+
+        Ok(())
+    }
+
     /// Claim timeout: if the opponent didn't play in time, you win.
     pub fn claim_timeout(
         env: Env,
@@ -609,8 +772,8 @@ impl TwoPlayerWordleContract {
             .get(&phase_key)
             .ok_or(Error::NoActiveGame)?;
 
-        // Must be in active or reveal phase
-        if phase != PHASE_ACTIVE && phase != PHASE_REVEAL {
+        // Must be in active, reveal, or draw phase
+        if phase != PHASE_ACTIVE && phase != PHASE_REVEAL && phase != PHASE_DRAW {
             return Err(Error::WrongPhase);
         }
 
@@ -653,7 +816,7 @@ impl TwoPlayerWordleContract {
             if &caller == timed_out_player {
                 return Err(Error::WrongPlayer);
             }
-        } else {
+        } else if phase == PHASE_REVEAL {
             // In reveal phase, the winner timed out on their reveal
             let win_key = Self::key_game_winner(&game_id);
             let current_winner: Address = env
@@ -665,6 +828,29 @@ impl TwoPlayerWordleContract {
             // Caller must be the non-winner (the one claiming timeout)
             if caller == current_winner {
                 return Err(Error::WrongPlayer);
+            }
+        } else {
+            // In draw phase: caller must have revealed, opponent must NOT have revealed
+            let is_p1 = caller == player1;
+            let caller_rev_key = if is_p1 {
+                Self::key_p1_revealed(&game_id)
+            } else {
+                Self::key_p2_revealed(&game_id)
+            };
+            let opp_rev_key = if is_p1 {
+                Self::key_p2_revealed(&game_id)
+            } else {
+                Self::key_p1_revealed(&game_id)
+            };
+            let caller_revealed: bool = env.storage().temporary().get(&caller_rev_key).unwrap_or(false);
+            let opp_revealed: bool = env.storage().temporary().get(&opp_rev_key).unwrap_or(false);
+
+            // Caller must have revealed their word, opponent must not have
+            if !caller_revealed {
+                return Err(Error::WrongPlayer);
+            }
+            if opp_revealed {
+                return Err(Error::WrongPhase); // opponent already revealed, no timeout to claim
             }
         }
 
@@ -754,7 +940,16 @@ impl TwoPlayerWordleContract {
             }
             payout = escrow_per_player * 2;
         } else {
-            // Draw: each player gets their own escrow back
+            // Draw: player must have revealed their word to withdraw
+            let rev_key = if is_p1 {
+                Self::key_p1_revealed(&game_id)
+            } else {
+                Self::key_p2_revealed(&game_id)
+            };
+            let revealed: bool = env.storage().temporary().get(&rev_key).unwrap_or(false);
+            if !revealed {
+                return Err(Error::InvalidReveal);
+            }
             payout = escrow_per_player;
         }
 
@@ -825,6 +1020,26 @@ impl TwoPlayerWordleContract {
     pub fn get_p2_time(env: Env, game_id: Address) -> u64 {
         let key = Self::key_p2_time(&game_id);
         env.storage().temporary().get(&key).unwrap_or(0)
+    }
+
+    pub fn get_p1_revealed(env: Env, game_id: Address) -> bool {
+        let key = Self::key_p1_revealed(&game_id);
+        env.storage().temporary().get(&key).unwrap_or(false)
+    }
+
+    pub fn get_p2_revealed(env: Env, game_id: Address) -> bool {
+        let key = Self::key_p2_revealed(&game_id);
+        env.storage().temporary().get(&key).unwrap_or(false)
+    }
+
+    pub fn get_p1_word(env: Env, game_id: Address) -> Bytes {
+        let key = Self::key_p1_word(&game_id);
+        env.storage().temporary().get(&key).unwrap_or(Bytes::new(&env))
+    }
+
+    pub fn get_p2_word(env: Env, game_id: Address) -> Bytes {
+        let key = Self::key_p2_word(&game_id);
+        env.storage().temporary().get(&key).unwrap_or(Bytes::new(&env))
     }
 
     // ── Private helpers ──────────────────────────────────────────────────

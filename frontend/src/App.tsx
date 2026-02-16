@@ -16,6 +16,7 @@ import {
   addOpponentGuess,
   updateMyGuessResults,
   markEscrowWithdrawn,
+  markDrawRevealed,
   getGameSecret,
   isWordInList,
   commitmentToBytes,
@@ -25,6 +26,7 @@ import {
   joinGameOnChain,
   submitTurnOnChain,
   revealWordOnChain,
+  revealWordDrawOnChain,
   claimTimeoutOnChain,
   withdrawEscrow,
   queryGameState,
@@ -53,6 +55,10 @@ function App() {
   const [winner, setWinner] = useState("");
   const [creatingGame, setCreatingGame] = useState(false);
   const [copiedGameId, setCopiedGameId] = useState(false);
+  const [myDrawRevealed, setMyDrawRevealed] = useState(false);
+  const [oppDrawRevealed, setOppDrawRevealed] = useState(false);
+  const [oppRevealedWord, setOppRevealedWord] = useState("");
+  const [drawDeadline, setDrawDeadline] = useState<number | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -145,12 +151,26 @@ function App() {
       }
 
       // Check for game over states
-      if (chain.phase === PHASE.FINALIZED || chain.phase === PHASE.DRAW) {
+      if (chain.phase === PHASE.FINALIZED) {
         setGameOver(true);
         if (chain.winner === g.myAddress) {
           setGameWon(true);
         }
         setWinner(chain.winner);
+      }
+
+      // Draw phase: track reveal status, don't set gameOver yet
+      if (chain.phase === PHASE.DRAW) {
+        const iAmP1 = g.myRole === "p1";
+        setMyDrawRevealed(iAmP1 ? chain.p1Revealed : chain.p2Revealed);
+        setOppDrawRevealed(iAmP1 ? chain.p2Revealed : chain.p1Revealed);
+        const oppWord = iAmP1 ? chain.p2Word : chain.p1Word;
+        if (oppWord) setOppRevealedWord(oppWord);
+        // Track draw deadline for countdown
+        if (chain.deadline > 0) {
+          const nowSecs = Date.now() / 1000;
+          setDrawDeadline(Math.max(0, chain.deadline - nowSecs));
+        }
       }
 
       if (chain.phase === PHASE.REVEAL) {
@@ -172,13 +192,16 @@ function App() {
     };
   }, [game, gameOver, pollGameState]);
 
-  // Countdown timer for active player
+  // Countdown timer for active player + draw deadline
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (!game || gameOver) return;
 
     timerRef.current = setInterval(() => {
-      if (isMyTurn && myTimeLeft !== null) {
+      if (onChainPhase === PHASE.DRAW) {
+        // Count down the draw reveal deadline
+        setDrawDeadline((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
+      } else if (isMyTurn && myTimeLeft !== null) {
         setMyTimeLeft((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
       } else if (!isMyTurn && oppTimeLeft !== null) {
         setOppTimeLeft((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
@@ -188,13 +211,14 @@ function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [game, gameOver, isMyTurn, myTimeLeft, oppTimeLeft]);
+  }, [game, gameOver, isMyTurn, myTimeLeft, oppTimeLeft, onChainPhase]);
 
   // Load existing game on mount
   useEffect(() => {
     const saved = loadGame();
     if (saved) {
       setGame(saved);
+      if (saved.drawRevealed) setMyDrawRevealed(true);
       // Restore letter states from my guesses
       const states: Record<string, number | undefined> = {};
       for (const g of saved.myGuesses) {
@@ -571,6 +595,57 @@ function App() {
       );
 
       addStatus("Word revealed! Game finalized.");
+      await pollGameState();
+    } catch (err: any) {
+      addStatus(`Error: ${err.message ?? err}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, game, wallet.address, wallet.sign, addStatus, pollGameState]);
+
+  // ── Reveal Word for Draw (both players reveal) ────────────────────────
+
+  const handleRevealWordDraw = useCallback(async () => {
+    if (busy || !game || !wallet.address) return;
+
+    setBusy(true);
+    setStatus([]);
+
+    try {
+      addStatus("Revealing your word for draw…");
+
+      // Generate ZK proof: "guess my own word" → all results = 2
+      const { generateProof } = await import("./generateProof");
+      const proofArtifacts = await generateProof(
+        game.word,
+        getGameSecret(game),
+        addStatus
+      );
+
+      // Generate Merkle proof for my word
+      const { getMerkleProof, proofToBytes } = await import("./merkleProof");
+      const merkleProof = await getMerkleProof(game.word);
+      if (!merkleProof) throw new Error("Could not generate Merkle proof for your word!");
+
+      const { pathElementsBytes, pathIndices, guessWordBytes } = proofToBytes(merkleProof);
+
+      await revealWordDrawOnChain(
+        game.gameId,
+        wallet.address,
+        wallet.sign,
+        guessWordBytes,
+        pathElementsBytes,
+        pathIndices,
+        proofArtifacts.publicInputsBytes,
+        proofArtifacts.proof,
+        addStatus
+      );
+
+      markDrawRevealed();
+      setMyDrawRevealed(true);
+      setGame((prev) => prev ? { ...prev, drawRevealed: true } : prev);
+
+      addStatus("Word revealed! You can now withdraw your escrow.");
       await pollGameState();
     } catch (err: any) {
       addStatus(`Error: ${err.message ?? err}`);
@@ -992,19 +1067,135 @@ function App() {
         </>
       )}
 
-      {/* ── Game Over ────────────────────────────────────────────────── */}
+      {/* ── Draw Phase: Both Players Reveal ───────────────────────── */}
+      {game && onChainPhase === PHASE.DRAW && !gameOver && (
+        <div className="mt-4 flex flex-col items-center gap-3 max-w-md">
+          <div className="px-6 py-4 rounded-lg text-center bg-yellow-900/50 border border-yellow-600 w-full">
+            <p className="text-yellow-300 font-bold text-lg mb-1">Draw!</p>
+            <p className="text-gray-400 text-sm">
+              Both players must reveal their secret word to withdraw escrow.
+            </p>
+            <p className="text-gray-400 text-sm mt-1">Your word: <span className="font-mono font-bold text-white">{game.word.toUpperCase()}</span></p>
+
+            {/* Draw deadline countdown */}
+            {drawDeadline !== null && (
+              <p className="text-gray-500 text-xs mt-2 font-mono">
+                Reveal deadline: {formatTime(drawDeadline)}
+              </p>
+            )}
+          </div>
+
+          {/* My reveal status */}
+          {!myDrawRevealed ? (
+            <button
+              onClick={handleRevealWordDraw}
+              disabled={busy}
+              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg w-full"
+            >
+              {busy ? "Revealing…" : `Reveal "${game.word.toUpperCase()}"`}
+            </button>
+          ) : (
+            <div className="px-4 py-2 bg-green-900/40 border border-green-600 rounded-lg text-green-300 text-sm w-full text-center">
+              You have revealed your word ✓
+            </div>
+          )}
+
+          {/* Opponent reveal status */}
+          {oppDrawRevealed ? (
+            <div className="px-4 py-2 bg-green-900/40 border border-green-600 rounded-lg text-green-300 text-sm w-full text-center">
+              Opponent revealed: <span className="font-mono font-bold text-white">{oppRevealedWord.toUpperCase() || "???"}</span> ✓
+            </div>
+          ) : (
+            <div className="px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-400 text-sm w-full text-center">
+              Waiting for opponent to reveal…
+            </div>
+          )}
+
+          {/* Withdraw button: only after I have revealed */}
+          {myDrawRevealed && game.escrowAmount > 0 && !game.escrowWithdrawn && (
+            <button
+              onClick={async () => {
+                if (withdrawing || !wallet.address) return;
+                setWithdrawing(true);
+                try {
+                  await withdrawEscrow(game.gameId, wallet.address!, wallet.sign, addStatus);
+                  markEscrowWithdrawn();
+                  setGame((prev) => prev ? { ...prev, escrowWithdrawn: true } : prev);
+                } catch (err: any) {
+                  addStatus(`Withdraw error: ${err.message ?? err}`);
+                } finally {
+                  setWithdrawing(false);
+                }
+              }}
+              disabled={withdrawing}
+              className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg w-full"
+            >
+              {withdrawing ? "Withdrawing…" : `Withdraw ${game.escrowAmount} XLM`}
+            </button>
+          )}
+          {game.escrowWithdrawn && (
+            <p className="text-green-400 text-sm">Escrow withdrawn ✓</p>
+          )}
+
+          {/* Claim timeout if opponent hasn't revealed and deadline passed */}
+          {myDrawRevealed && !oppDrawRevealed && drawDeadline !== null && drawDeadline <= 0 && (
+            <button
+              onClick={handleClaimTimeout}
+              disabled={busy}
+              className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded text-sm w-full"
+            >
+              Opponent didn't reveal — Claim Full Pot
+            </button>
+          )}
+
+          {/* Loading spinner */}
+          {busy && (
+            <div className="mt-2 flex items-center gap-2 text-yellow-400">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
+              </svg>
+              Processing…
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              clearGame();
+              setGame(null);
+              setCurrentGuess("");
+              setGameOver(false);
+              setLetterStates({});
+              setStatus([]);
+              setMyTimeLeft(null);
+              setOppTimeLeft(null);
+              setGameWon(false);
+              setEscrowInput("");
+              setOnChainPhase(PHASE.NONE);
+              setChainTurn(0);
+              setWinner("");
+              setCopiedGameId(false);
+              setMyDrawRevealed(false);
+              setOppDrawRevealed(false);
+              setOppRevealedWord("");
+              setDrawDeadline(null);
+            }}
+            className="bg-gray-700 hover:bg-gray-600 text-white font-bold px-5 py-2 rounded-lg"
+          >
+            New Game
+          </button>
+        </div>
+      )}
+
+      {/* ── Game Over (Finalized — Win/Loss) ─────────────────────────── */}
       {gameOver && game && (
         <div className="mt-4 flex flex-col items-center gap-3 max-w-md">
           <div className={`px-6 py-3 rounded-lg text-center ${
-            onChainPhase === PHASE.DRAW
-              ? "bg-yellow-900/50 border border-yellow-600"
-              : gameWon
+            gameWon
               ? "bg-green-900/50 border border-green-600"
               : "bg-red-900/50 border border-red-600"
           }`}>
-            {onChainPhase === PHASE.DRAW ? (
-              <p className="text-yellow-300 font-bold text-lg">Draw!</p>
-            ) : gameWon ? (
+            {gameWon ? (
               <p className="text-green-300 font-bold text-lg">You Won!</p>
             ) : (
               <p className="text-red-300 font-bold text-lg">You Lost</p>
@@ -1013,32 +1204,26 @@ function App() {
           </div>
 
           {/* Escrow actions */}
-          {game.escrowAmount > 0 && !game.escrowWithdrawn && (
-            <>
-              {(gameWon || onChainPhase === PHASE.DRAW) && (
-                <button
-                  onClick={async () => {
-                    if (withdrawing || !wallet.address) return;
-                    setWithdrawing(true);
-                    try {
-                      await withdrawEscrow(game.gameId, wallet.address!, wallet.sign, addStatus);
-                      markEscrowWithdrawn();
-                      setGame((prev) => prev ? { ...prev, escrowWithdrawn: true } : prev);
-                    } catch (err: any) {
-                      addStatus(`Withdraw error: ${err.message ?? err}`);
-                    } finally {
-                      setWithdrawing(false);
-                    }
-                  }}
-                  disabled={withdrawing}
-                  className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg"
-                >
-                  {withdrawing
-                    ? "Withdrawing…"
-                    : `Withdraw ${onChainPhase === PHASE.DRAW ? game.escrowAmount : game.escrowAmount * 2} XLM`}
-                </button>
-              )}
-            </>
+          {game.escrowAmount > 0 && !game.escrowWithdrawn && gameWon && (
+            <button
+              onClick={async () => {
+                if (withdrawing || !wallet.address) return;
+                setWithdrawing(true);
+                try {
+                  await withdrawEscrow(game.gameId, wallet.address!, wallet.sign, addStatus);
+                  markEscrowWithdrawn();
+                  setGame((prev) => prev ? { ...prev, escrowWithdrawn: true } : prev);
+                } catch (err: any) {
+                  addStatus(`Withdraw error: ${err.message ?? err}`);
+                } finally {
+                  setWithdrawing(false);
+                }
+              }}
+              disabled={withdrawing}
+              className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg"
+            >
+              {withdrawing ? "Withdrawing…" : `Withdraw ${game.escrowAmount * 2} XLM`}
+            </button>
           )}
           {game.escrowWithdrawn && (
             <p className="text-gray-400 text-sm">Escrow withdrawn</p>
@@ -1060,6 +1245,10 @@ function App() {
               setChainTurn(0);
               setWinner("");
               setCopiedGameId(false);
+              setMyDrawRevealed(false);
+              setOppDrawRevealed(false);
+              setOppRevealedWord("");
+              setDrawDeadline(null);
             }}
             className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 rounded-lg"
           >
