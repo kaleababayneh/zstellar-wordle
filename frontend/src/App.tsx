@@ -119,18 +119,30 @@ function App() {
       // Check if opponent verified our last guess — update results
       // Only apply when it's MY turn: that means opponent just submitted
       // and lastResults are the results of MY previous guess.
+      // Guard: only apply if we have fewer verified guesses than the opponent
+      // has actually verified on-chain, preventing stale results from being
+      // applied to a newly submitted (not-yet-verified) guess.
       if (myTurn && chain.lastResults.length === 5 && chain.phase === PHASE.ACTIVE) {
-        const lastUnverified = g.myGuesses.findIndex(
-          (guess: GuessEntry) => !guess.verified
-        );
-        if (lastUnverified >= 0) {
-          updateMyGuessResults(lastUnverified, chain.lastResults);
-          const updated = loadGame();
-          if (updated) {
-            setGame({ ...updated });
-            // Update letter states
-            const guess = updated.myGuesses[lastUnverified];
-            updateLetterStates(guess.word, guess.results);
+        const expectedVerified = g.myRole === "p1"
+          ? Math.floor(chain.turn / 2)
+          : Math.floor(chain.turn / 2) - 1;
+        const verifiedCount = g.myGuesses.filter(
+          (guess: GuessEntry) => guess.verified
+        ).length;
+
+        if (verifiedCount < expectedVerified) {
+          const lastUnverified = g.myGuesses.findIndex(
+            (guess: GuessEntry) => !guess.verified
+          );
+          if (lastUnverified >= 0) {
+            updateMyGuessResults(lastUnverified, chain.lastResults);
+            const updated = loadGame();
+            if (updated) {
+              setGame({ ...updated });
+              // Update letter states
+              const guess = updated.myGuesses[lastUnverified];
+              updateLetterStates(guess.word, guess.results);
+            }
           }
         }
       }
