@@ -11,3 +11,75 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+/* ── Wordle tile flip animation ─────────────────────────── */
+.tile-flip-container {
+  perspective: 600px;
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.tile-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.5s ease-in-out;
+}
+
+.tile-flip-inner.flipped {
+  transform: rotateX(180deg);
+}
+
+.tile-front,
+.tile-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 0.25rem;
+  border-width: 2px;
+}
+
+.tile-front {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #9ca3af;
+  color: white;
+}
+
+.tile-back {
+  transform: rotateX(180deg);
+  color: white;
+}
+
+.tile-back.result-correct {
+  background-color: #16a34a;
+  border-color: #16a34a;
+}
+
+.tile-back.result-present {
+  background-color: #eab308;
+  border-color: #eab308;
+}
+
+.tile-back.result-absent {
+  background-color: #374151;
+  border-color: #374151;
+}
+
+/* Pop animation for typed letters */
+@keyframes tile-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.tile-pop {
+  animation: tile-pop 0.1s ease-in-out;
+}
