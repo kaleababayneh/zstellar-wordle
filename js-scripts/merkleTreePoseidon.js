@@ -1,6 +1,7 @@
 import { createRequire } from 'module';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { Barretenberg, Fr } from '@aztec/bb.js';
 
 const require = createRequire(import.meta.url);
 const words = require('an-array-of-english-words');
@@ -17,7 +18,6 @@ WORDLE = WORDLE.map(w => w.toLowerCase());
 
 const total_number = WORDLE.length; // returns 12653 log2 12653 = 13.63 -> 14 levels
 
-import { Barretenberg, Fr } from '@aztec/bb.js';
 
 // Optimized: reuse single Barretenberg instance
 let globalBB = null;
