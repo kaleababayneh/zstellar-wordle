@@ -158,10 +158,27 @@ impl TwoPlayerWordleContract {
     ) -> Result<(), Error> {
         player1.require_auth();
 
-        // Check if game already exists
+        // Check if game already exists — allow overwrite if still in WAITING phase
         let phase_key = Self::key_game_phase(&player1);
         if env.storage().temporary().has(&phase_key) {
-            return Err(Error::GameAlreadyExists);
+            let existing_phase: u32 = env
+                .storage()
+                .temporary()
+                .get(&phase_key)
+                .unwrap_or(255);
+            if existing_phase != PHASE_WAITING {
+                return Err(Error::GameAlreadyExists);
+            }
+            // WAITING phase: refund old escrow before overwriting
+            let old_amt_key = Self::key_escrow_amount(&player1);
+            let old_amount: i128 = env.storage().temporary().get(&old_amt_key).unwrap_or(0);
+            if old_amount > 0 {
+                let old_token_key = Self::key_escrow_token(&player1);
+                if let Some(old_token_addr) = env.storage().temporary().get::<_, Address>(&old_token_key) {
+                    let old_token_client = token::TokenClient::new(&env, &old_token_addr);
+                    old_token_client.transfer(&env.current_contract_address(), &player1, &old_amount);
+                }
+            }
         }
 
         // Transfer escrow from player1 to contract
@@ -189,6 +206,10 @@ impl TwoPlayerWordleContract {
         let amt_key = Self::key_escrow_amount(&player1);
         env.storage().temporary().set(&amt_key, &amount);
         env.storage().temporary().extend_ttl(&amt_key, 5000, 5000);
+
+        // Emit event so the lobby can discover open games
+        env.events()
+            .publish((symbol_short!("created"),), player1.clone());
 
         Ok(())
     }
@@ -257,6 +278,10 @@ impl TwoPlayerWordleContract {
         let dead_key = Self::key_game_deadline(&game_id);
         env.storage().temporary().set(&dead_key, &deadline);
         env.storage().temporary().extend_ttl(&dead_key, 5000, 5000);
+
+        // Emit event so lobby can remove this game
+        env.events()
+            .publish((symbol_short!("joined"),), (game_id.clone(), player2.clone()));
 
         Ok(())
     }

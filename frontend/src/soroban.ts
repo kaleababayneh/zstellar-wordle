@@ -541,3 +541,104 @@ export async function withdrawEscrow(
   log("Escrow withdrawn ✅");
 }
 
+// ── Lobby: Fetch open games ──────────────────────────────────────────────
+
+export interface OpenGame {
+  gameId: string;
+  escrowXlm: number;
+  ledger: number;
+  createdAt: string;
+}
+
+/**
+ * Fetch recently created games that are still in WAITING phase.
+ * Uses Soroban RPC getEvents to find "created" events from the contract.
+ */
+export async function fetchOpenGames(): Promise<OpenGame[]> {
+  const server = getServer();
+
+  let latestLedgerInfo;
+  try {
+    latestLedgerInfo = await server.getLatestLedger();
+  } catch {
+    return [];
+  }
+
+  // Look back ~24 hours (~17280 ledgers at 5s/ledger)
+  const startLedger = Math.max(1, latestLedgerInfo.sequence - 17000);
+  const topicFilter = StellarSdk.xdr.ScVal.scvSymbol("created").toXDR("base64");
+
+  let response: StellarSdk.rpc.Api.GetEventsResponse;
+  try {
+    response = await server.getEvents({
+      startLedger,
+      filters: [
+        {
+          type: "contract",
+          contractIds: [CONTRACT_ID],
+          topics: [[topicFilter]],
+        },
+      ],
+      limit: 100,
+    });
+  } catch {
+    return [];
+  }
+
+  if (!response || !response.events || response.events.length === 0) return [];
+
+  // Extract game IDs from event data (each event value = Address of player1)
+  const candidates = new Map<string, { ledger: number; createdAt: string }>();
+  for (const evt of response.events) {
+    try {
+      const dataScVal = StellarSdk.xdr.ScVal.fromXDR(evt.value, "base64");
+      const gameId = StellarSdk.Address.fromScVal(dataScVal).toString();
+      const existing = candidates.get(gameId);
+      if (!existing || evt.ledger > existing.ledger) {
+        candidates.set(gameId, {
+          ledger: evt.ledger,
+          createdAt: evt.ledgerClosedAt || "",
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (candidates.size === 0) return [];
+
+  // Check which games are still in WAITING phase & get escrow amounts
+  const gameIds = Array.from(candidates.keys());
+  const checks = await Promise.all(
+    gameIds.map(async (id) => {
+      try {
+        const scVal = new StellarSdk.Address(id).toScVal();
+        const [phaseVal, escrowVal] = await Promise.all([
+          queryContract("get_game_phase", [scVal]),
+          queryContract("get_escrow_amount", [scVal]),
+        ]);
+        const phase = phaseVal ? (phaseVal.value() as number) : 255;
+        const escrow = escrowVal ? Number(escrowVal.value()) : 0;
+        return { phase, escrow };
+      } catch {
+        return { phase: 255, escrow: 0 };
+      }
+    })
+  );
+
+  const openGames: OpenGame[] = [];
+  for (let i = 0; i < gameIds.length; i++) {
+    if (checks[i].phase === 0) {
+      // PHASE_WAITING = 0
+      const meta = candidates.get(gameIds[i])!;
+      openGames.push({
+        gameId: gameIds[i],
+        escrowXlm: checks[i].escrow / STROOPS_PER_XLM,
+        ledger: meta.ledger,
+        createdAt: meta.createdAt,
+      });
+    }
+  }
+
+  return openGames;
+}

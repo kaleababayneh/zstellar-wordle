@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { WordleGrid } from "./components/WordleGrid";
 import { Keyboard } from "./components/Keyboard";
 import { StatusBar } from "./components/StatusBar";
+import { Lobby } from "./components/Lobby";
 import { WORD_LENGTH, MAX_GUESSES, CONTRACT_ID, PHASE, POLL_INTERVAL_MS } from "./config";
 import { calculateWordleResults } from "./gameLogic";
 import { useFreighter } from "./hooks/useFreighter";
@@ -213,7 +214,7 @@ function App() {
     };
   }, [game, gameOver, isMyTurn, myTimeLeft, oppTimeLeft, onChainPhase]);
 
-  // Load existing game on mount
+  // Load existing game on mount + parse URL params
   useEffect(() => {
     const saved = loadGame();
     if (saved) {
@@ -233,6 +234,15 @@ function App() {
         }
       }
       setLetterStates(states);
+    } else {
+      // Check URL for ?game=GAME_ID
+      const params = new URLSearchParams(window.location.search);
+      const gameParam = params.get("game");
+      if (gameParam) {
+        setJoinGameId(gameParam.trim());
+        // Clean URL without reload
+        window.history.replaceState({}, "", window.location.pathname);
+      }
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -776,6 +786,14 @@ function App() {
       {/* ── No Game: Create or Join ──────────────────────────────────── */}
       {!game && wallet.address && (
         <div className="mb-6 flex flex-col items-center gap-4 w-full max-w-lg">
+          {/* Game Lobby */}
+          <Lobby
+            currentAddress={wallet.address}
+            onJoinGame={(gameId) => setJoinGameId(gameId)}
+          />
+
+          <div className="text-gray-500 text-sm">— or create a new game —</div>
+
           <div className="w-full bg-gray-800 rounded-lg p-4 border border-gray-700">
             <h2 className="text-lg font-bold mb-3">Create Game (Player 1)</h2>
 
@@ -899,7 +917,27 @@ function App() {
         <div className="mb-6 text-center">
           <div className="bg-yellow-900/40 border border-yellow-600 rounded-lg p-4 mb-3 max-w-md">
             <p className="text-yellow-300 font-medium mb-2">Waiting for Player 2 to join…</p>
-            <p className="text-gray-400 text-xs mb-2">Share this Game ID with your opponent (different browser / wallet):</p>
+            <p className="text-gray-400 text-xs mb-2">Share this link or Game ID with your opponent:</p>
+
+            {/* Shareable link */}
+            <div className="flex items-center gap-2 bg-gray-800 p-2 rounded mb-2">
+              <p className="text-blue-400 font-mono text-xs break-all flex-1 select-all">
+                {`${window.location.origin}${window.location.pathname}?game=${game.gameId}`}
+              </p>
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}${window.location.pathname}?game=${game.gameId}`;
+                  navigator.clipboard.writeText(url);
+                  setCopiedGameId(true);
+                  setTimeout(() => setCopiedGameId(false), 2000);
+                }}
+                className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded whitespace-nowrap"
+              >
+                {copiedGameId ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+
+            {/* Game ID fallback */}
             <div className="flex items-center gap-2 bg-gray-800 p-2 rounded">
               <p className="text-green-400 font-mono text-xs break-all flex-1 select-all">
                 {game.gameId}
@@ -912,7 +950,7 @@ function App() {
                 }}
                 className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded whitespace-nowrap"
               >
-                {copiedGameId ? "Copied!" : "Copy"}
+                Copy ID
               </button>
             </div>
             {game.escrowAmount > 0 && (

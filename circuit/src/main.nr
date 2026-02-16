@@ -18,13 +18,9 @@ fn main(
     fourth_letter: Field,
     fifth_letter: Field,
     salt: Field,
-    )
-     {
-
+    ){
 
     assert(commitment_hashes == Poseidon2::hash([salt, first_letter, second_letter, third_letter, fourth_letter, fifth_letter], 6));
-
-
 
     let mut correct_letters = [first_letter, second_letter, third_letter, fourth_letter, fifth_letter];
     let guess_letters = [first_letter_guess, second_letter_guess, third_letter_guess, fourth_letter_guess, fifth_letter_guess];
