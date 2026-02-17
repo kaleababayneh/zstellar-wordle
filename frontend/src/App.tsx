@@ -160,6 +160,25 @@ function App() {
         if (updated) setGame({ ...updated });
       }
 
+      // REVEAL phase: apply winning results to the winner's last unverified guess
+      // When the opponent verifies the winning guess ([2,2,2,2,2]), the phase
+      // transitions to REVEAL so the ACTIVE-phase block above never runs.
+      // We handle it here so the winner's board shows green tiles.
+      if (chain.phase === PHASE.REVEAL && chain.winner === g.myAddress && chain.lastResults.length === 5) {
+        const lastUnverified = g.myGuesses.findIndex(
+          (guess: GuessEntry) => !guess.verified
+        );
+        if (lastUnverified >= 0) {
+          updateMyGuessResults(lastUnverified, chain.lastResults);
+          const updated = loadGame();
+          if (updated) {
+            setGame({ ...updated });
+            const guess = updated.myGuesses[lastUnverified];
+            updateLetterStates(guess.word, guess.results);
+          }
+        }
+      }
+
       // Check for game over states
       if (chain.phase === PHASE.FINALIZED) {
         setGameOver(true);
