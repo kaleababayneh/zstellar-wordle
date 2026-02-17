@@ -8,7 +8,7 @@ type Tab = "open" | "my" | "create" | "join";
 
 interface LobbyProps {
   currentAddress: string;
-  onJoinGame: (gameId: string) => void;
+  onJoinGame: (gameId: string, customWord?: string) => void;
   onCreateGame: (escrowXlm: number, customWord?: string) => void;
   onResumeGame: (gameId: string) => void;
 }
@@ -444,7 +444,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                   setJoinSecretWordError(`"${joinSecretWord}" is not valid.`);
                   return;
                 }
-                onJoinGame(joinGameId);
+                onJoinGame(joinGameId, joinSecretWord || undefined);
               }}
               disabled={!joinGameId}
               className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-sm"

@@ -452,7 +452,10 @@ function App() {
         return;
       }
 
-      const { pathElementsBytes, pathIndices, guessWordBytes } = proofToBytes(merkleProof);
+      const { pathElementsBytes, pathIndices } = proofToBytes(merkleProof);
+
+      // Derive word bytes directly from the typed guess for guaranteed correctness
+      const guessWordBytes = new Uint8Array(currentGuess.toLowerCase().split('').map(ch => ch.charCodeAt(0)));
 
       addStatus(`"${currentGuess}" is a valid word (Merkle proof ready)`);
 
@@ -626,7 +629,10 @@ function App() {
       const merkleProof = await getMerkleProof(game.word);
       if (!merkleProof) throw new Error("Could not generate Merkle proof for your word!");
 
-      const { pathElementsBytes, pathIndices, guessWordBytes } = proofToBytes(merkleProof);
+      const { pathElementsBytes, pathIndices } = proofToBytes(merkleProof);
+
+      // Derive word bytes directly from game.word for guaranteed correctness
+      const guessWordBytes = new Uint8Array(game.word.toLowerCase().split('').map(ch => ch.charCodeAt(0)));
 
       await revealWordOnChain(
         game.gameId,
@@ -673,7 +679,10 @@ function App() {
       const merkleProof = await getMerkleProof(game.word);
       if (!merkleProof) throw new Error("Could not generate Merkle proof for your word!");
 
-      const { pathElementsBytes, pathIndices, guessWordBytes } = proofToBytes(merkleProof);
+      const { pathElementsBytes, pathIndices } = proofToBytes(merkleProof);
+
+      // Derive word bytes directly from game.word for guaranteed correctness
+      const guessWordBytes = new Uint8Array(game.word.toLowerCase().split('').map(ch => ch.charCodeAt(0)));
 
       await revealWordDrawOnChain(
         game.gameId,
@@ -824,7 +833,7 @@ function App() {
         <div className="mb-6 flex flex-col items-center w-full">
           <Lobby
             currentAddress={wallet.address}
-            onJoinGame={(gameId) => handleJoinGame(gameId)}
+            onJoinGame={(gameId, customWord) => handleJoinGame(gameId, customWord)}
             onCreateGame={(escrow, word) => handleCreateGame(escrow, word)}
             onResumeGame={() => {
               const saved = loadGame();
