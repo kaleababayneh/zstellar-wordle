@@ -207,7 +207,15 @@ export async function queryGameState(gameId: string): Promise<{
   if (winnerVal) {
     try {
       winner = StellarSdk.Address.fromScVal(winnerVal).toString();
-    } catch { /* empty */ }
+    } catch {
+      // Fallback: try reading as raw string/bytes
+      try {
+        const raw = winnerVal.value();
+        if (raw && typeof raw === "string" && raw.length > 0) {
+          winner = raw;
+        }
+      } catch { /* empty */ }
+    }
   }
 
   let escrowAmount = 0;
@@ -595,7 +603,9 @@ export async function fetchOpenGames(): Promise<OpenGame[]> {
   const candidates = new Map<string, { creator: string; ledger: number; createdAt: string }>();
   for (const evt of response.events) {
     try {
-      const dataScVal = StellarSdk.xdr.ScVal.fromXDR(evt.value, "base64");
+      const dataScVal = typeof evt.value === "string"
+        ? StellarSdk.xdr.ScVal.fromXDR(evt.value, "base64")
+        : evt.value;
       // New format: ScVec([game_id_address, player1_address])
       const vec = dataScVal.vec();
       if (vec && vec.length >= 2) {

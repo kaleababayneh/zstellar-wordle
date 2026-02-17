@@ -186,6 +186,14 @@ function App() {
           setGameWon(true);
         }
         setWinner(chain.winner);
+        // Sync escrow from chain in case local state lost it
+        const chainEscrowXlm = Number(chain.escrowAmount) / 10_000_000;
+        if (chainEscrowXlm > 0 && g.escrowAmount !== chainEscrowXlm) {
+          g.escrowAmount = chainEscrowXlm;
+          saveGame(g);
+        }
+        // Always refresh React state so withdraw button renders
+        setGame({ ...g });
       }
 
       // Draw phase: track reveal status, don't set gameOver yet
@@ -200,6 +208,13 @@ function App() {
           const nowSecs = Date.now() / 1000;
           setDrawDeadline(Math.max(0, chain.deadline - nowSecs));
         }
+        // Sync escrow from chain in case local state lost it
+        const chainEscrowXlm = Number(chain.escrowAmount) / 10_000_000;
+        if (chainEscrowXlm > 0 && g.escrowAmount !== chainEscrowXlm) {
+          g.escrowAmount = chainEscrowXlm;
+          saveGame(g);
+        }
+        setGame({ ...g });
       }
 
       if (chain.phase === PHASE.REVEAL) {
@@ -1158,24 +1173,28 @@ function App() {
         </div>
       )}
 
-      {/* ── Game Over (Finalized — Win/Loss) ─────────────────────────── */}
+      {/* ── Game Over (Finalized — Win/Loss/Draw) ───────────────────────── */}
       {gameOver && game && (
         <div className="mt-4 flex flex-col items-center gap-3 max-w-md">
           <div className={`px-6 py-3 rounded-lg text-center ${
             gameWon
               ? "bg-green-900/50 border border-green-600"
-              : "bg-red-900/50 border border-red-600"
+              : !winner
+                ? "bg-yellow-900/50 border border-yellow-600"
+                : "bg-red-900/50 border border-red-600"
           }`}>
             {gameWon ? (
               <p className="text-green-300 font-bold text-lg">You Won!</p>
+            ) : !winner ? (
+              <p className="text-yellow-300 font-bold text-lg">Draw!</p>
             ) : (
               <p className="text-red-300 font-bold text-lg">You Lost</p>
             )}
             <p className="text-gray-400 text-sm mt-1">Your word: {game.word.toUpperCase()}</p>
           </div>
 
-          {/* Escrow actions */}
-          {game.escrowAmount > 0 && !game.escrowWithdrawn && gameWon && (
+          {/* Escrow actions — show for winner OR draw (no winner) */}
+          {game.escrowAmount > 0 && !game.escrowWithdrawn && (gameWon || !winner) && (
             <button
               onClick={async () => {
                 if (withdrawing || !wallet.address) return;
@@ -1193,11 +1212,11 @@ function App() {
               disabled={withdrawing}
               className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg"
             >
-              {withdrawing ? "Withdrawing…" : `Withdraw ${game.escrowAmount * 2} XLM`}
+              {withdrawing ? "Withdrawing…" : `Withdraw ${gameWon ? game.escrowAmount * 2 : game.escrowAmount} XLM`}
             </button>
           )}
           {game.escrowWithdrawn && (
-            <p className="text-gray-400 text-sm">Escrow withdrawn</p>
+            <p className="text-green-400 text-sm">Escrow withdrawn ✓</p>
           )}
 
           <button
