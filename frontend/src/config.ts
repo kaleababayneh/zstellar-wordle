@@ -39,5 +39,5 @@ export const PHASE = {
 export const MAX_TURNS = 13;
 
 // Polling interval for checking on-chain state (ms)
-export const POLL_INTERVAL_MS = 2000;
+export const POLL_INTERVAL_MS = 1000;
 
