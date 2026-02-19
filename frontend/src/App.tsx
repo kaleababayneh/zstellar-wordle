@@ -551,6 +551,12 @@ function App() {
       };
       addMyGuess(myGuess);
 
+      // Update React state immediately so the grid shows the guess
+      // before the on-chain tx completes (avoids blink/glitch)
+      const freshState = loadGame();
+      if (freshState) setGame({ ...freshState });
+      setCurrentGuess("");
+
       // Submit turn on-chain
       addStatus("Submitting turn on Stellar testnet…");
       await submitTurnOnChain(
@@ -568,7 +574,6 @@ function App() {
       // Refresh local state
       const updated = loadGame();
       if (updated) setGame({ ...updated });
-      setCurrentGuess("");
 
       addStatus("Turn submitted! Waiting for opponent…");
 
