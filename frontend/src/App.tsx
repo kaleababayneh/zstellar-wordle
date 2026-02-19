@@ -182,18 +182,31 @@ function App() {
       // Check for game over states
       if (chain.phase === PHASE.FINALIZED) {
         setGameOver(true);
-        if (chain.winner === g.myAddress) {
+        // Contract returns game_id as fallback when no winner is set;
+        // only treat as real winner if it differs from game_id.
+        const hasRealWinner = chain.winner && chain.winner !== g.gameId;
+        if (hasRealWinner && chain.winner === g.myAddress) {
           setGameWon(true);
         }
-        setWinner(chain.winner);
-        // Sync escrow from chain in case local state lost it
-        const chainEscrowXlm = Number(chain.escrowAmount) / 10_000_000;
-        if (chainEscrowXlm > 0 && g.escrowAmount !== chainEscrowXlm) {
+        setWinner(hasRealWinner ? chain.winner : "");
+
+        // Sync escrow from chain (chain.escrowAmount is already in stroops)
+        const chainEscrowXlm = chain.escrowAmount / 10_000_000;
+        if (chainEscrowXlm > 0 && (!g.escrowAmount || g.escrowAmount !== chainEscrowXlm)) {
           g.escrowAmount = chainEscrowXlm;
-          saveGame(g);
         }
+        // Ensure escrowAmount is never NaN
+        if (!g.escrowAmount || isNaN(g.escrowAmount)) {
+          g.escrowAmount = chainEscrowXlm > 0 ? chainEscrowXlm : 0;
+        }
+        saveGame(g);
         // Always refresh React state so withdraw button renders
         setGame({ ...g });
+
+        // Track opponent's revealed word if available
+        const iAmP1 = g.myRole === "p1";
+        const oppWord = iAmP1 ? chain.p2Word : chain.p1Word;
+        if (oppWord) setOppRevealedWord(oppWord);
       }
 
       // Draw phase: track reveal status, don't set gameOver yet
@@ -208,17 +221,25 @@ function App() {
           const nowSecs = Date.now() / 1000;
           setDrawDeadline(Math.max(0, chain.deadline - nowSecs));
         }
-        // Sync escrow from chain in case local state lost it
-        const chainEscrowXlm = Number(chain.escrowAmount) / 10_000_000;
-        if (chainEscrowXlm > 0 && g.escrowAmount !== chainEscrowXlm) {
+        // Sync escrow from chain (chain.escrowAmount is already in stroops)
+        const chainEscrowXlm = chain.escrowAmount / 10_000_000;
+        if (chainEscrowXlm > 0 && (!g.escrowAmount || g.escrowAmount !== chainEscrowXlm)) {
           g.escrowAmount = chainEscrowXlm;
-          saveGame(g);
         }
+        // Ensure escrowAmount is never NaN
+        if (!g.escrowAmount || isNaN(g.escrowAmount)) {
+          g.escrowAmount = chainEscrowXlm > 0 ? chainEscrowXlm : 0;
+        }
+        saveGame(g);
         setGame({ ...g });
       }
 
       if (chain.phase === PHASE.REVEAL) {
         setWinner(chain.winner);
+        // Track opponent's word if they've already revealed
+        const iAmP1 = g.myRole === "p1";
+        const oppWord = iAmP1 ? chain.p2Word : chain.p1Word;
+        if (oppWord) setOppRevealedWord(oppWord);
       }
     } catch (err) {
       // silently ignore poll errors
@@ -383,7 +404,8 @@ function App() {
         return;
       }
 
-      const escrowXlm = Number(chain.escrowAmount) / 10_000_000;
+      // chain.escrowAmount is already parsed from i128 to a JS number in queryGameState
+      const escrowXlm = chain.escrowAmount / 10_000_000;
 
       // Get creator (player1) address from on-chain
       const { getGameCreator } = await import("./soroban");
@@ -1190,7 +1212,10 @@ function App() {
             ) : (
               <p className="text-red-300 font-bold text-lg">You Lost</p>
             )}
-            <p className="text-gray-400 text-sm mt-1">Your word: {game.word.toUpperCase()}</p>
+            <p className="text-gray-400 text-sm mt-1">Your word: <span className="font-mono font-bold text-white">{game.word.toUpperCase()}</span></p>
+            {oppRevealedWord && (
+              <p className="text-gray-400 text-sm mt-1">Opponent's word: <span className="font-mono font-bold text-white">{oppRevealedWord.toUpperCase()}</span></p>
+            )}
           </div>
 
           {/* Escrow actions — show for winner OR draw (no winner) */}

@@ -221,8 +221,13 @@ export async function queryGameState(gameId: string): Promise<{
   let escrowAmount = 0;
   if (escrowVal) {
     try {
-      escrowAmount = Number(escrowVal.value());
-    } catch { /* empty */ }
+      // i128 ScVal cannot be converted with Number(val.value()) — use scValToBigInt
+      escrowAmount = Number(StellarSdk.scValToBigInt(escrowVal));
+    } catch {
+      try {
+        escrowAmount = Number(escrowVal.value());
+      } catch { /* empty */ }
+    }
   }
 
   const p1Revealed = p1RevVal ? Boolean(p1RevVal.value()) : false;

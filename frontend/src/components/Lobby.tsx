@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import type { OpenGame, GameSummary } from "../soroban";
-import { fetchOpenGames, fetchGameSummaries } from "../soroban";
+import { fetchOpenGames, fetchGameSummaries, queryGameState, getGameCreator } from "../soroban";
 import { getMyGameEntries, removeMyGameEntry, isWordInList } from "../gameState";
-import { PHASE, WORD_LENGTH } from "../config";
+import { PHASE, WORD_LENGTH, STROOPS_PER_XLM } from "../config";
 
 type Tab = "open" | "my" | "create" | "join";
 
@@ -64,6 +64,15 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
   const [joinGameId, setJoinGameId] = useState("");
   const [joinSecretWord, setJoinSecretWord] = useState("");
   const [joinSecretWordError, setJoinSecretWordError] = useState("");
+
+  // Join game preview (looked-up info)
+  const [joinPreview, setJoinPreview] = useState<{
+    escrowXlm: number;
+    creator: string;
+    phase: number;
+  } | null>(null);
+  const [joinLooking, setJoinLooking] = useState(false);
+  const [joinLookupError, setJoinLookupError] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -214,6 +223,12 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                     <button
                       onClick={() => {
                         setJoinGameId(game.gameId);
+                        setJoinPreview({
+                          escrowXlm: game.escrowXlm,
+                          creator: game.creator,
+                          phase: PHASE.WAITING,
+                        });
+                        setJoinLookupError("");
                         setTab("join");
                       }}
                       className="text-xs bg-green-600 hover:bg-green-500 text-white font-bold px-4 py-1.5 rounded"
@@ -405,52 +420,125 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
             {/* Game ID */}
             <div className="mb-4">
               <label className="block text-gray-400 text-sm mb-1">Game ID</label>
-              <input
-                type="text"
-                value={joinGameId}
-                onChange={(e) => setJoinGameId(e.target.value.trim())}
-                placeholder="Paste Game ID…"
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono"
-              />
-            </div>
-
-            {/* Secret word */}
-            <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-1">Your Secret Word (optional)</label>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  maxLength={WORD_LENGTH}
-                  value={joinSecretWord}
+                  value={joinGameId}
                   onChange={(e) => {
-                    setJoinSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
-                    setJoinSecretWordError("");
+                    setJoinGameId(e.target.value.trim());
+                    setJoinPreview(null);
+                    setJoinLookupError("");
                   }}
-                  placeholder="Leave blank for random…"
-                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm tracking-widest font-mono uppercase"
+                  placeholder="Paste Game ID…"
+                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono"
                 />
+                <button
+                  onClick={async () => {
+                    if (!joinGameId) return;
+                    setJoinLooking(true);
+                    setJoinLookupError("");
+                    setJoinPreview(null);
+                    try {
+                      const [chain, creator] = await Promise.all([
+                        queryGameState(joinGameId),
+                        getGameCreator(joinGameId),
+                      ]);
+                      if (chain.phase !== PHASE.WAITING) {
+                        setJoinLookupError("This game is not accepting new players.");
+                      } else {
+                        setJoinPreview({
+                          escrowXlm: chain.escrowAmount / STROOPS_PER_XLM,
+                          creator: creator || "Unknown",
+                          phase: chain.phase,
+                        });
+                      }
+                    } catch (err: any) {
+                      setJoinLookupError(err.message ?? "Failed to look up game");
+                    } finally {
+                      setJoinLooking(false);
+                    }
+                  }}
+                  disabled={!joinGameId || joinLooking}
+                  className="bg-gray-600 hover:bg-gray-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded"
+                >
+                  {joinLooking ? "Looking up…" : "Look up"}
+                </button>
               </div>
-              {joinSecretWordError && <p className="text-red-400 text-xs mt-1">{joinSecretWordError}</p>}
+              {joinLookupError && <p className="text-red-400 text-xs mt-1">{joinLookupError}</p>}
             </div>
 
-            <button
-              onClick={() => {
-                if (!joinGameId) return;
-                if (joinSecretWord && joinSecretWord.length !== WORD_LENGTH) {
-                  setJoinSecretWordError(`Must be ${WORD_LENGTH} letters.`);
-                  return;
-                }
-                if (joinSecretWord && !isWordInList(joinSecretWord)) {
-                  setJoinSecretWordError(`"${joinSecretWord}" is not valid.`);
-                  return;
-                }
-                onJoinGame(joinGameId, joinSecretWord || undefined);
-              }}
-              disabled={!joinGameId}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-sm"
-            >
-              {joinSecretWord ? `Join with "${joinSecretWord.toUpperCase()}"` : "Join with Random Word"}
-            </button>
+            {/* Preview card: show escrow + creator when looked up */}
+            {joinPreview && (
+              <div className="mb-4 bg-gray-900 border border-gray-600 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-300 mb-2">Game Details</h4>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xs px-2 py-0.5 rounded border bg-yellow-900/50 text-yellow-300 border-yellow-600">
+                    Waiting for P2
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500 text-xs">Created by</span>
+                    <p className="text-green-400 font-mono text-xs">{formatAddr(joinPreview.creator)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 text-xs">Escrow (per player)</span>
+                    <p className={`font-medium text-sm ${joinPreview.escrowXlm > 0 ? "text-yellow-400" : "text-gray-400"}`}>
+                      {joinPreview.escrowXlm > 0 ? `${joinPreview.escrowXlm} XLM` : "No escrow"}
+                    </p>
+                  </div>
+                </div>
+                {joinPreview.escrowXlm > 0 && (
+                  <p className="text-yellow-500/80 text-xs mt-2">
+                    You will deposit <strong>{joinPreview.escrowXlm} XLM</strong> to match Player 1's escrow. Winner takes the full pot ({joinPreview.escrowXlm * 2} XLM).
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Secret word (only shown after successful lookup) */}
+            {joinPreview && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-gray-400 text-sm mb-1">Your Secret Word (optional)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      maxLength={WORD_LENGTH}
+                      value={joinSecretWord}
+                      onChange={(e) => {
+                        setJoinSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
+                        setJoinSecretWordError("");
+                      }}
+                      placeholder="Leave blank for random…"
+                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm tracking-widest font-mono uppercase"
+                    />
+                  </div>
+                  {joinSecretWordError && <p className="text-red-400 text-xs mt-1">{joinSecretWordError}</p>}
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!joinGameId) return;
+                    if (joinSecretWord && joinSecretWord.length !== WORD_LENGTH) {
+                      setJoinSecretWordError(`Must be ${WORD_LENGTH} letters.`);
+                      return;
+                    }
+                    if (joinSecretWord && !isWordInList(joinSecretWord)) {
+                      setJoinSecretWordError(`"${joinSecretWord}" is not valid.`);
+                      return;
+                    }
+                    onJoinGame(joinGameId, joinSecretWord || undefined);
+                  }}
+                  disabled={!joinGameId}
+                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-sm"
+                >
+                  {joinSecretWord
+                    ? `Join with "${joinSecretWord.toUpperCase()}" (deposit ${joinPreview.escrowXlm > 0 ? joinPreview.escrowXlm + " XLM" : "no escrow"})`
+                    : `Join with Random Word (deposit ${joinPreview.escrowXlm > 0 ? joinPreview.escrowXlm + " XLM" : "no escrow"})`}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
