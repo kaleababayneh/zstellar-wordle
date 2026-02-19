@@ -1,7 +1,7 @@
 // Game configuration & constants
 
 // The contract deployed on Stellar testnet
-export const CONTRACT_ID = "CDOWNVK3UIKFNDKWBPT4KFKIS3IGU2N7MK4MNQ6ZMKWSEQYEZZ6G3GCV";
+export const CONTRACT_ID = "CDBRZDAK7MWU7M7UV2MERRSAUWP7ADBPROMIWEGYQ5XDDRS4I2RTPVLD";
 
 // Stellar testnet RPC
 export const RPC_URL = "https://soroban-testnet.stellar.org";

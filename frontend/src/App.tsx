@@ -57,6 +57,7 @@ function App() {
   const [oppDrawRevealed, setOppDrawRevealed] = useState(false);
   const [oppRevealedWord, setOppRevealedWord] = useState("");
   const [drawDeadline, setDrawDeadline] = useState<number | null>(null);
+  const [chainPolled, setChainPolled] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -93,6 +94,7 @@ function App() {
       const chain = await queryGameState(g.gameId);
 
       setOnChainPhase(chain.phase);
+      setChainPolled(true);
       setChainTurn(chain.turn);
       const myTurn = checkMyTurn(chain.turn, g.myRole);
       setIsMyTurn(myTurn);
@@ -880,6 +882,57 @@ function App() {
               }
             }}
           />
+        </div>
+      )}
+
+      {/* ── Loading on-chain state / Game expired ────────────────────── */}
+      {game && onChainPhase === PHASE.NONE && !gameOver && (
+        <div className="mb-6 text-center">
+          <div className={`border rounded-lg p-6 max-w-md flex flex-col items-center gap-3 ${
+            chainPolled
+              ? "bg-red-900/30 border-red-700"
+              : "bg-gray-800 border-gray-600"
+          }`}>
+            {!chainPolled ? (
+              <>
+                <svg className="animate-spin h-6 w-6 text-gray-400" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
+                </svg>
+                <p className="text-gray-400 text-sm">Loading game state from chain…</p>
+              </>
+            ) : (
+              <>
+                <p className="text-red-300 font-bold text-lg">Game Not Found</p>
+                <p className="text-gray-400 text-sm text-center">
+                  This game no longer exists on-chain. It may have expired or was created on a previous contract.
+                </p>
+              </>
+            )}
+            <button
+              onClick={() => {
+                clearGame();
+                setGame(null);
+                setCurrentGuess("");
+                setGameOver(false);
+                setLetterStates({});
+                setStatus([]);
+                setMyTimeLeft(null);
+                setOppTimeLeft(null);
+                setGameWon(false);
+                setOnChainPhase(PHASE.NONE);
+                setChainPolled(false);
+                setChainTurn(0);
+                setWinner("");
+              }}
+              className={chainPolled
+                ? "mt-2 bg-gray-700 hover:bg-gray-600 text-white font-bold px-5 py-2 rounded-lg text-sm"
+                : "mt-2 text-xs text-gray-500 hover:text-gray-300 underline"
+              }
+            >
+              Back to lobby
+            </button>
+          </div>
         </div>
       )}
 
