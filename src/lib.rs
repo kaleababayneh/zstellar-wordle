@@ -636,15 +636,7 @@ impl TwoPlayerWordleContract {
             Self::do_verify_guess(&env, &reveal_word, &path_elements, &path_indices);
 
         if merkle_result.is_ok() {
-            // Word is valid — winner confirmed, store the word and finalize
-            let word_key = if caller == player1 {
-                Self::key_p1_word(&game_id)
-            } else {
-                Self::key_p2_word(&game_id)
-            };
-            env.storage().temporary().set(&word_key, &reveal_word);
-            env.storage().temporary().extend_ttl(&word_key, 5000, 5000);
-
+            // Word is valid — winner confirmed, finalize
             env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
         } else {
             // Word NOT in dictionary — winner cheated!
