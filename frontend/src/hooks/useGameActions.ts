@@ -190,23 +190,23 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
     setStatus([]);
 
     try {
-      const { isValidWord, getMerkleProof, proofToBytes } = await import("../merkleProof");
+      const { isPoseidonValidWord, getPoseidonMerkleProof, poseidonProofToBytes } = await import("../poseidonMerkleProof");
 
-      const valid = await isValidWord(currentGuess);
+      const valid = await isPoseidonValidWord(currentGuess);
       if (!valid) {
         addStatus(`"${currentGuess}" is not in the word list.`);
         setBusy(false);
         return;
       }
 
-      const merkleProof = await getMerkleProof(currentGuess);
+      const merkleProof = await getPoseidonMerkleProof(currentGuess);
       if (!merkleProof) {
         addStatus(`Could not generate Merkle proof for "${currentGuess}".`);
         setBusy(false);
         return;
       }
 
-      const { pathElementsBytes, pathIndices } = proofToBytes(merkleProof);
+      const { pathElementsBytes, pathIndices } = poseidonProofToBytes(merkleProof);
       const guessWordBytes = new Uint8Array(currentGuess.toLowerCase().split("").map((ch) => ch.charCodeAt(0)));
       addStatus(`"${currentGuess}" is a valid word (Merkle proof ready)`);
 

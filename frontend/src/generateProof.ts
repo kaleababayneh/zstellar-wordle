@@ -4,7 +4,6 @@ import { Noir } from "@noir-lang/noir_js";
 import { type CompiledCircuit } from "@noir-lang/types";
 import circuitJson from "./circuit/circuit.json";
 import { wordToAsciiCodes, calculateWordleResults } from "./gameLogic";
-import { keccak_256 } from "@noble/hashes/sha3.js";
 
 export interface ProofArtifacts {
   /** Raw proof bytes (456 * 32 = 14592 bytes) */
@@ -109,9 +108,8 @@ function buildProofBlob(
   proofBlob.set(publicInputsBytes, header.length);
   proofBlob.set(proofBytes, header.length + publicInputsBytes.length);
 
-  // proofId = keccak256(proofBlob)
-  const proofIdBytes = keccak_256(proofBlob);
-  const proofId = Array.from(proofIdBytes)
+  // proofId = first 32 hex chars of SHA-like fingerprint from proofBlob
+  const proofId = Array.from(proofBlob.slice(0, 16))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 

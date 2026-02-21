@@ -102,3 +102,23 @@ export async function getPoseidonRoot(): Promise<string> {
   await ensureLoaded();
   return _meta!.root;
 }
+
+/**
+ * Convert a Poseidon Merkle proof to Uint8Array format for Soroban contract calls.
+ * Each path element is a 32-byte big-endian field element.
+ */
+export function poseidonProofToBytes(proof: PoseidonMerkleProof): {
+  pathElementsBytes: Uint8Array[];
+  pathIndices: number[];
+} {
+  const pathElementsBytes = proof.pathElements.map((hex) => {
+    const clean = hex.replace(/^0x/, "").padStart(64, "0");
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(clean.substr(i * 2, 2), 16);
+    }
+    return bytes;
+  });
+
+  return { pathElementsBytes, pathIndices: proof.pathIndices };
+}
