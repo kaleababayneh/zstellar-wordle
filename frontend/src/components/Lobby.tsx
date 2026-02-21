@@ -161,10 +161,10 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
   };
 
   const tabClass = (t: Tab) =>
-    `px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+    `px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${
       tab === t
-        ? "bg-card text-foreground border-t border-l border-r border-border"
-        : "bg-transparent text-muted-foreground hover:text-foreground border-b border-border"
+        ? "text-foreground border-b-2 border-foreground"
+        : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
     }`;
 
   // Active (non-finished) my games
@@ -172,14 +172,14 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
   const finishedMyGames = myGameSummaries.filter((g) => g.phase === PHASE.FINALIZED);
 
   return (
-    <div className="w-full max-w-2xl">
+    <div className="w-full max-w-lg">
       {/* Tab bar */}
-      <div className="flex border-b border-border mb-0">
+      <div className="flex items-center justify-center gap-1 border-b border-border mb-6">
         <button className={tabClass("open")} onClick={() => setTab("open")}>
-          Open Games {openGames.length > 0 && <span className="ml-1 bg-primary text-primary-foreground text-xs px-1.5 py-0.5 rounded-full">{openGames.length}</span>}
+          Games {openGames.length > 0 && <span className="ml-1 text-xs font-mono text-primary">{openGames.length}</span>}
         </button>
         <button className={tabClass("my")} onClick={() => setTab("my")}>
-          My Games {activeMyGames.length > 0 && <span className="ml-1 bg-ring text-primary-foreground text-xs px-1.5 py-0.5 rounded-full">{activeMyGames.length}</span>}
+          Mine {activeMyGames.length > 0 && <span className="ml-1 text-xs font-mono text-primary">{activeMyGames.length}</span>}
         </button>
         <button className={tabClass("create")} onClick={() => setTab("create")}>
           Create
@@ -187,11 +187,10 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
         <button className={tabClass("join")} onClick={() => setTab("join")}>
           Join
         </button>
-        <div className="flex-1 border-b border-border" />
         <button
           onClick={refresh}
           disabled={loading}
-          className="px-3 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 self-center transition-colors"
+          className="ml-auto px-2 py-1 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
           title="Refresh"
         >
           {loading ? (
@@ -200,64 +199,59 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
               <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
             </svg>
           ) : (
-            "↻"
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
           )}
         </button>
       </div>
 
       {/* Tab content */}
-      <div className="bg-card rounded-b-lg border border-t-0 border-border p-4 min-h-70">
+      <div className="min-h-60">
         {error && <p className="text-destructive text-xs mb-3">{error}</p>}
 
         {/* ── Open Games Tab ──────────────────────────────────────── */}
         {tab === "open" && (
           <>
             {!loading && openGames.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground text-sm mb-2">No open games right now.</p>
+              <div className="flex flex-col items-center gap-3 py-12">
+                <p className="text-muted-foreground text-sm">No open games right now.</p>
                 <button
                   onClick={() => setTab("create")}
-                  className="text-primary hover:text-primary/80 text-sm underline transition-colors"
+                  className="text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 py-2.5 rounded-md transition-colors"
                 >
-                  Create one to get started
+                  Create a Game
                 </button>
               </div>
             )}
-            <div className="space-y-2 max-h-80 overflow-y-auto">
+            <div className="space-y-2 max-h-96 overflow-y-auto">
               {openGames.map((game) => (
                 <div
                   key={game.gameId}
-                  className="flex items-center justify-between bg-muted rounded-lg px-4 py-3 border border-border hover:border-muted-foreground/30 transition-colors"
+                  className="flex items-center justify-between rounded-md px-4 py-3 border border-border hover:border-muted-foreground/30 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs px-2 py-0.5 rounded border bg-accent/20 text-accent border-accent/40">
-                        Waiting for P2
-                      </span>
-                      {game.escrowXlm > 0 && (
-                        <span className="text-accent text-xs font-medium">
-                          {game.escrowXlm} XLM
-                        </span>
+                      {game.escrowXlm > 0 ? (
+                        <span className="text-accent text-sm font-bold">{game.escrowXlm} XLM</span>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">Free</span>
                       )}
-                      {game.escrowXlm === 0 && (
-                        <span className="text-muted-foreground text-xs">No escrow</span>
+                      <span className="text-muted-foreground/40">·</span>
+                      <span className="text-muted-foreground font-mono text-xs">{formatAddr(game.creator)}</span>
+                      {game.createdAt && (
+                        <>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span className="text-muted-foreground/60 text-xs">{timeAgo(game.createdAt)}</span>
+                        </>
                       )}
                     </div>
-                    <p className="text-muted-foreground text-xs">
-                      Created by <span className="text-primary font-mono">{formatAddr(game.creator)}</span>
-                      {game.createdAt && <span className="ml-2 text-muted-foreground/60">{timeAgo(game.createdAt)}</span>}
-                    </p>
-                    <p className="text-muted-foreground/50 font-mono text-[10px] truncate mt-0.5">
-                      {game.gameId}
-                    </p>
                   </div>
-                  <div className="flex gap-2 ml-3 shrink-0">
+                  <div className="flex gap-1.5 ml-3 shrink-0">
                     <button
                       onClick={() => copyLink(game.gameId)}
-                      className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-2 py-1.5 rounded-md transition-colors"
+                      className="text-muted-foreground hover:text-foreground p-1.5 rounded-md transition-colors"
                       title="Copy join link"
                     >
-                      🔗
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                     <button
                       onClick={() => {
@@ -285,11 +279,11 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
         {tab === "my" && (
           <>
             {myGameSummaries.length === 0 && !loading && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground text-sm mb-2">You haven't created or joined any games yet.</p>
+              <div className="flex flex-col items-center gap-3 py-12">
+                <p className="text-muted-foreground text-sm">No games yet.</p>
                 <button
                   onClick={() => setTab("create")}
-                  className="text-primary hover:text-primary/80 text-sm underline transition-colors"
+                  className="text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 py-2.5 rounded-md transition-colors"
                 >
                   Create your first game
                 </button>
@@ -299,7 +293,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
             {/* Active games */}
             {activeMyGames.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">Active Games</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Active</h3>
                 <div className="space-y-2">
                   {activeMyGames.map((game) => {
                     const pl = phaseLabel(game.phase);
@@ -307,34 +301,31 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                     return (
                       <div
                         key={game.gameId}
-                        className="flex items-center justify-between bg-muted rounded-lg px-4 py-3 border border-border hover:border-muted-foreground/30 transition-colors"
+                        className="flex items-center justify-between rounded-md px-4 py-3 border border-border hover:border-muted-foreground/30 transition-colors"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-xs px-2 py-0.5 rounded border ${pl.color}`}>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-md border ${pl.color}`}>
                               {pl.text}
                             </span>
                             {entry && (
                               <span className="text-xs text-muted-foreground">
-                                You: {entry.role === "p1" ? "Player 1" : "Player 2"}
+                                {entry.role === "p1" ? "P1" : "P2"}
                               </span>
                             )}
                             {game.escrowXlm > 0 && (
-                              <span className="text-accent text-xs">{game.escrowXlm} XLM</span>
+                              <span className="text-accent text-xs font-medium">{game.escrowXlm} XLM</span>
                             )}
                           </div>
-                          <p className="text-muted-foreground/50 font-mono text-[10px] truncate">
-                            {game.gameId}
-                          </p>
                         </div>
-                        <div className="flex gap-2 ml-3 shrink-0">
+                        <div className="flex gap-1.5 ml-3 shrink-0">
                           {game.phase === PHASE.WAITING && (
                             <button
                               onClick={() => copyLink(game.gameId)}
-                              className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-2 py-1.5 rounded-md transition-colors"
+                              className="text-muted-foreground hover:text-foreground p-1.5 rounded-md transition-colors"
                               title="Copy invite link"
                             >
-                              🔗 Share
+                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
                             </button>
                           )}
                           <button
@@ -354,29 +345,20 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
             {/* Finished games */}
             {finishedMyGames.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">Finished Games</h3>
-                <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Finished</h3>
+                <div className="space-y-1.5">
                   {finishedMyGames.map((game) => (
                     <div
                       key={game.gameId}
-                      className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-2 border border-border/50"
+                      className="flex items-center justify-between rounded-md px-4 py-2 border border-border/50 text-muted-foreground"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-xs px-2 py-0.5 rounded border bg-muted text-muted-foreground border-border">
-                            Finished
-                          </span>
-                        </div>
-                        <p className="text-muted-foreground/50 font-mono text-[10px] truncate">
-                          {game.gameId}
-                        </p>
-                      </div>
+                      <span className="font-mono text-[10px] truncate flex-1">{game.gameId}</span>
                       <button
                         onClick={() => removeMyGameEntry(game.gameId)}
-                        className="text-xs text-muted-foreground hover:text-destructive px-2 py-1 transition-colors"
-                        title="Remove from list"
+                        className="text-muted-foreground hover:text-destructive p-1 transition-colors"
+                        title="Remove"
                       >
-                        ✕
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
                     </div>
                   ))}
@@ -388,31 +370,21 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
 
         {/* ── Create Game Tab ─────────────────────────────────────── */}
         {tab === "create" && (
-          <div className="max-w-md mx-auto">
-            <h3 className="text-lg font-bold mb-4 text-foreground">Create New Game</h3>
-
-            {/* Escrow */}
-            <div className="mb-4">
-              <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Escrow Amount</label>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={escrowInput}
-                  onChange={(e) => setEscrowInput(e.target.value)}
-                  placeholder="0"
-                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
-                />
-                <span className="text-muted-foreground text-sm font-medium">XLM</span>
+          <div className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto py-4">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20">
+                <svg className="h-7 w-7 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </div>
-              <p className="text-muted-foreground/70 text-xs mt-1.5">Both players must deposit. Winner takes the pot.</p>
+              <h2 className="text-xl font-bold text-foreground font-sans">Create a Challenge</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">
+                Pick a secret word and set your escrow. Your opponent will try to guess it.
+              </p>
             </div>
 
-            {/* Secret word */}
-            <div className="mb-4">
-              <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Secret Word (optional)</label>
-              <div className="flex gap-2">
+            <div className="w-full flex flex-col gap-3">
+              {/* Secret word */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Secret Word</label>
                 <input
                   type="text"
                   maxLength={WORD_LENGTH}
@@ -421,15 +393,31 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                     setSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
                     setSecretWordError("");
                   }}
-                  placeholder="Leave blank for random…"
-                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm tracking-widest font-mono uppercase focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+                  placeholder="Leave blank for random"
+                  className="w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+                  autoFocus
                 />
+                {secretWordError && <p className="text-destructive text-sm text-center mt-1">{secretWordError}</p>}
               </div>
-              {secretWordError && <p className="text-destructive text-xs mt-1">{secretWordError}</p>}
-              <p className="text-muted-foreground/70 text-xs mt-1.5">Your opponent will try to guess this word.</p>
-            </div>
 
-            <div className="flex gap-2">
+              {/* Escrow */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Escrow Amount</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={escrowInput}
+                    onChange={(e) => setEscrowInput(e.target.value)}
+                    placeholder="0"
+                    className="flex-1 h-12 bg-muted border border-border rounded-md px-4 text-sm font-mono text-foreground text-center focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+                  />
+                  <span className="text-muted-foreground text-sm font-semibold">XLM</span>
+                </div>
+                <p className="text-muted-foreground/70 text-xs mt-1 text-center">Both players deposit. Winner takes the pot.</p>
+              </div>
+
               <button
                 onClick={() => {
                   if (secretWord && secretWord.length !== WORD_LENGTH) {
@@ -443,7 +431,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                   const escrow = parseFloat(escrowInput) || 0;
                   onCreateGame(escrow, secretWord || undefined);
                 }}
-                className="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold px-6 py-3 rounded-lg text-sm transition-colors"
+                className="w-full h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-md text-sm transition-colors"
               >
                 {secretWord ? `Create with "${secretWord.toUpperCase()}"` : "Create with Random Word"}
               </button>
@@ -453,70 +441,71 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
 
         {/* ── Join Game Tab ────────────────────────────────────────── */}
         {tab === "join" && (
-          <div className="max-w-md mx-auto">
-            <h3 className="text-lg font-bold mb-4 text-foreground">Join Game</h3>
-
-            {/* Game ID */}
-            <div className="mb-4">
-              <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Game ID</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={joinGameId}
-                  onChange={(e) => {
-                    setJoinGameId(e.target.value.trim());
-                    setJoinPreview(null);
-                    setJoinLookupError("");
-                  }}
-                  placeholder="Paste Game ID…"
-                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
-                />
-                <button
-                  onClick={() => doLookup(joinGameId)}
-                  disabled={!joinGameId || !isValidStellarId(joinGameId) || joinLooking}
-                  className="bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-secondary-foreground text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
-                >
-                  {joinLooking ? "Looking up…" : "Look up"}
-                </button>
+          <div className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto py-4">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20">
+                <svg className="h-7 w-7 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
               </div>
-              {joinLookupError && <p className="text-destructive text-xs mt-1">{joinLookupError}</p>}
+              <h2 className="text-xl font-bold text-foreground font-sans">Join a Game</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">
+                Paste a Game ID to look up a challenge and join it.
+              </p>
             </div>
 
-            {/* Preview card: show escrow + creator when looked up */}
-            {joinPreview && (
-              <div className="mb-4 bg-muted border border-border rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-foreground mb-2">Game Details</h4>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-xs px-2 py-0.5 rounded border bg-accent/20 text-accent border-accent/40">
-                    Waiting for P2
-                  </span>
+            <div className="w-full flex flex-col gap-3">
+              {/* Game ID */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Game ID</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={joinGameId}
+                    onChange={(e) => {
+                      setJoinGameId(e.target.value.trim());
+                      setJoinPreview(null);
+                      setJoinLookupError("");
+                    }}
+                    placeholder="Paste Game ID…"
+                    className="flex-1 h-12 bg-muted border border-border rounded-md px-3 text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+                  />
+                  <button
+                    onClick={() => doLookup(joinGameId)}
+                    disabled={!joinGameId || !isValidStellarId(joinGameId) || joinLooking}
+                    className="bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-secondary-foreground text-sm font-semibold px-4 rounded-md transition-colors"
+                  >
+                    {joinLooking ? "…" : "Look up"}
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground text-xs">Created by</span>
-                    <p className="text-primary font-mono text-xs">{formatAddr(joinPreview.creator)}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground text-xs">Escrow (per player)</span>
-                    <p className={`font-medium text-sm ${joinPreview.escrowXlm > 0 ? "text-accent" : "text-muted-foreground"}`}>
-                      {joinPreview.escrowXlm > 0 ? `${joinPreview.escrowXlm} XLM` : "No escrow"}
-                    </p>
-                  </div>
-                </div>
-                {joinPreview.escrowXlm > 0 && (
-                  <p className="text-accent/70 text-xs mt-2">
-                    You will deposit <strong>{joinPreview.escrowXlm} XLM</strong> to match Player 1's escrow. Winner takes the full pot ({joinPreview.escrowXlm * 2} XLM).
-                  </p>
-                )}
+                {joinLookupError && <p className="text-destructive text-sm text-center mt-1">{joinLookupError}</p>}
               </div>
-            )}
 
-            {/* Secret word (only shown after successful lookup) */}
-            {joinPreview && (
-              <>
-                <div className="mb-4">
-                  <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Your Secret Word (optional)</label>
-                  <div className="flex gap-2">
+              {/* Preview card */}
+              {joinPreview && (
+                <div className="bg-muted border border-border rounded-md p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Game Details</span>
+                    <span className="text-xs px-2 py-0.5 rounded-md border bg-accent/20 text-accent border-accent/40">Waiting</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <div>
+                      <span className="text-muted-foreground text-xs">Creator</span>
+                      <p className="text-foreground font-mono text-xs">{formatAddr(joinPreview.creator)}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-muted-foreground text-xs">Escrow</span>
+                      <p className={`font-semibold text-sm ${joinPreview.escrowXlm > 0 ? "text-accent" : "text-muted-foreground"}`}>
+                        {joinPreview.escrowXlm > 0 ? `${joinPreview.escrowXlm} XLM` : "Free"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Secret word + Join button (only after lookup) */}
+              {joinPreview && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Your Secret Word</label>
                     <input
                       type="text"
                       maxLength={WORD_LENGTH}
@@ -525,35 +514,33 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                         setJoinSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
                         setJoinSecretWordError("");
                       }}
-                      placeholder="Leave blank for random…"
-                      className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm tracking-widest font-mono uppercase focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+                      placeholder="Leave blank for random"
+                      className="w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
                     />
+                    {joinSecretWordError && <p className="text-destructive text-sm text-center mt-1">{joinSecretWordError}</p>}
                   </div>
-                  {joinSecretWordError && <p className="text-destructive text-xs mt-1">{joinSecretWordError}</p>}
-                </div>
 
-                <button
-                  onClick={() => {
-                    if (!joinGameId) return;
-                    if (joinSecretWord && joinSecretWord.length !== WORD_LENGTH) {
-                      setJoinSecretWordError(`Must be ${WORD_LENGTH} letters.`);
-                      return;
-                    }
-                    if (joinSecretWord && !isWordInList(joinSecretWord)) {
-                      setJoinSecretWordError(`"${joinSecretWord}" is not valid.`);
-                      return;
-                    }
-                    onJoinGame(joinGameId, joinSecretWord || undefined);
-                  }}
-                  disabled={!joinGameId}
-                  className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold px-6 py-3 rounded-lg text-sm transition-colors"
-                >
-                  {joinSecretWord
-                    ? `Join with "${joinSecretWord.toUpperCase()}" (deposit ${joinPreview.escrowXlm > 0 ? joinPreview.escrowXlm + " XLM" : "no escrow"})`
-                    : `Join with Random Word (deposit ${joinPreview.escrowXlm > 0 ? joinPreview.escrowXlm + " XLM" : "no escrow"})`}
-                </button>
-              </>
-            )}
+                  <button
+                    onClick={() => {
+                      if (!joinGameId) return;
+                      if (joinSecretWord && joinSecretWord.length !== WORD_LENGTH) {
+                        setJoinSecretWordError(`Must be ${WORD_LENGTH} letters.`);
+                        return;
+                      }
+                      if (joinSecretWord && !isWordInList(joinSecretWord)) {
+                        setJoinSecretWordError(`"${joinSecretWord}" is not valid.`);
+                        return;
+                      }
+                      onJoinGame(joinGameId, joinSecretWord || undefined);
+                    }}
+                    disabled={!joinGameId}
+                    className="w-full h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-md text-sm transition-colors"
+                  >
+                    {joinPreview.escrowXlm > 0 ? `Join · Deposit ${joinPreview.escrowXlm} XLM` : "Join Game"}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -20,15 +20,13 @@ export function DrawPhase({
   onRevealWordDraw, onWithdraw, onNewGame,
 }: DrawPhaseProps) {
   return (
-    <div className="mt-4 flex flex-col items-center gap-3 max-w-md animate-fade-in-up">
-      <div className="px-6 py-4 rounded-lg text-center bg-accent/15 border border-accent/40 w-full">
-        <p className="text-accent font-bold text-lg mb-1">Draw!</p>
+    <div className="flex flex-col items-center gap-3 w-full max-w-sm mx-auto animate-fade-in-up py-6">
+      <div className="w-full text-center">
+        <p className="text-accent font-bold text-2xl mb-1">Draw!</p>
         <p className="text-muted-foreground text-sm">
-          Both players must reveal their secret word to withdraw escrow.
+          Both players reveal their word to withdraw escrow.
         </p>
-        <p className="text-muted-foreground text-sm mt-1">
-          Your word: <span className="font-mono font-bold text-foreground">{game.word.toUpperCase()}</span>
-        </p>
+        <p className="text-foreground text-sm mt-2 font-mono font-bold tracking-widest">{game.word.toUpperCase()}</p>
       </div>
 
       {/* My reveal */}
@@ -36,23 +34,23 @@ export function DrawPhase({
         <button
           onClick={onRevealWordDraw}
           disabled={busy}
-          className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold px-5 py-2.5 rounded-lg w-full transition-colors"
+          className="w-full h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-md transition-colors"
         >
           {busy ? "Revealing…" : `Reveal "${game.word.toUpperCase()}"`}
         </button>
       ) : (
-        <div className="px-4 py-2.5 bg-correct/15 border border-correct/40 rounded-lg text-correct text-sm w-full text-center font-medium">
-          You have revealed your word ✓
+        <div className="w-full bg-foreground text-background rounded-md px-4 py-2.5 text-sm text-center font-bold">
+          You revealed your word ✓
         </div>
       )}
 
       {/* Opponent reveal */}
       {oppDrawRevealed ? (
-        <div className="px-4 py-2.5 bg-correct/15 border border-correct/40 rounded-lg text-correct text-sm w-full text-center font-medium">
-          Opponent revealed: <span className="font-mono font-bold text-foreground">{oppRevealedWord.toUpperCase() || "???"}</span> ✓
+        <div className="w-full bg-foreground text-background rounded-md px-4 py-2.5 text-sm text-center font-bold">
+          Opponent: <span className="font-mono tracking-widest">{oppRevealedWord.toUpperCase() || "???"}</span> ✓
         </div>
       ) : (
-        <div className="px-4 py-2.5 bg-card border border-border rounded-lg text-muted-foreground text-sm w-full text-center">
+        <div className="w-full border border-border rounded-md px-4 py-2.5 text-muted-foreground text-sm text-center">
           Waiting for opponent to reveal…
         </div>
       )}
@@ -62,27 +60,27 @@ export function DrawPhase({
         <button
           onClick={onWithdraw}
           disabled={withdrawing}
-          className="bg-accent hover:bg-accent/90 disabled:opacity-50 text-accent-foreground font-bold px-5 py-2.5 rounded-lg w-full transition-colors"
+          className="w-full h-12 bg-accent hover:bg-accent/90 disabled:opacity-50 text-accent-foreground font-bold rounded-md transition-colors"
         >
           {withdrawing ? "Withdrawing…" : `Withdraw ${game.escrowAmount} XLM`}
         </button>
       )}
       {game.escrowWithdrawn && (
-        <p className="text-primary text-sm font-medium">Escrow withdrawn ✓</p>
+        <p className="text-primary text-sm font-semibold">Escrow withdrawn ✓</p>
       )}
 
       {busy && (
-        <div className="mt-2 flex items-center gap-2 text-accent">
-          <Spinner size={5} />
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Spinner size={4} />
           Processing…
         </div>
       )}
 
       <button
         onClick={onNewGame}
-        className="bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold px-5 py-2.5 rounded-lg transition-colors"
+        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        New Game
+        ← New Game
       </button>
     </div>
   );

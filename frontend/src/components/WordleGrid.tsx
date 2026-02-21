@@ -82,9 +82,9 @@ export const WordleGrid = memo(function WordleGrid({
   maxRows = 6,
 }: WordleGridProps) {
   const emptyCellClass =
-    "w-14 h-14 sm:w-[62px] sm:h-[62px] border-2 flex items-center justify-center text-xl sm:text-2xl font-bold uppercase rounded-md bg-transparent border-border text-transparent";
+    "w-[58px] h-[58px] sm:w-[62px] sm:h-[62px] border-2 flex items-center justify-center text-2xl sm:text-3xl font-bold uppercase select-none border-border bg-transparent text-transparent";
   const typingCellClass =
-    "w-14 h-14 sm:w-[62px] sm:h-[62px] border-2 flex items-center justify-center text-xl sm:text-2xl font-bold uppercase rounded-md bg-transparent border-muted-foreground text-foreground tile-pop";
+    "w-[58px] h-[58px] sm:w-[62px] sm:h-[62px] border-2 flex items-center justify-center text-2xl sm:text-3xl font-bold uppercase select-none border-muted-foreground bg-transparent text-foreground tile-pop";
 
   const rows: React.ReactNode[] = [];
 
@@ -92,7 +92,7 @@ export const WordleGrid = memo(function WordleGrid({
   for (let i = 0; i < guesses.length && i < maxRows; i++) {
     const g = guesses[i];
     rows.push(
-      <div key={`g-${i}`} className="flex gap-1 justify-center">
+      <div key={`g-${i}`} className="flex gap-[5px] justify-center">
         {Array.from({ length: 5 }).map((_, j) => (
           <FlipTile
             key={`${i}-${j}`}
@@ -108,7 +108,7 @@ export const WordleGrid = memo(function WordleGrid({
   // Current guess row
   if (guesses.length < maxRows) {
     rows.push(
-      <div key="current" className="flex gap-1 justify-center">
+      <div key="current" className="flex gap-[5px] justify-center">
         {Array.from({ length: 5 }).map((_, j) => (
           <div
             key={j}
@@ -125,7 +125,7 @@ export const WordleGrid = memo(function WordleGrid({
   const remaining = maxRows - rows.length;
   for (let i = 0; i < remaining; i++) {
     rows.push(
-      <div key={`e-${i}`} className="flex gap-1 justify-center">
+      <div key={`e-${i}`} className="flex gap-[5px] justify-center">
         {Array.from({ length: 5 }).map((_, j) => (
           <div key={j} className={emptyCellClass} />
         ))}
@@ -133,5 +133,5 @@ export const WordleGrid = memo(function WordleGrid({
     );
   }
 
-  return <div className="flex flex-col gap-1">{rows}</div>;
+  return <div className="flex flex-col gap-[5px]">{rows}</div>;
 });

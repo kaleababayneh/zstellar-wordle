@@ -53,7 +53,7 @@ function App() {
     <div className="flex flex-col items-center min-h-dvh bg-background text-foreground">
       <Header wallet={wallet} addStatus={addStatus} proverReady={proverReady} />
 
-      <div className="relative flex-1 flex flex-col items-center w-full max-w-2xl px-4 py-6">
+      <main className="flex-1 flex flex-col items-center justify-center w-full max-w-2xl px-4 py-4">
 
       {/* Lobby */}
       {!game && wallet.address && (
@@ -129,20 +129,7 @@ function App() {
       )}
 
       <StatusBar messages={status} />
-
-      {/* Legend */}
-      <div className="mt-6 flex gap-5 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="w-4 h-4 bg-correct rounded-sm inline-block" /> Correct
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-4 h-4 bg-present rounded-sm inline-block" /> Wrong pos
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-4 h-4 bg-absent rounded-sm inline-block" /> Absent
-        </span>
-      </div>
-      </div>
+      </main>
     </div>
   );
 }
