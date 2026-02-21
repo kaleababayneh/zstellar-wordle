@@ -71,8 +71,12 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
   };
 
   // Extracted lookup logic so it can be called from button or auto-trigger
-  const doLookup = useCallback(async (gameId: string) => {
+  const lookupInFlight = useRef(false);
+
+  const doLookup = useCallback(async (gameId: string, force = false) => {
     if (!gameId || !isValidStellarId(gameId)) return;
+    if (lookupInFlight.current && !force) return;
+    lookupInFlight.current = true;
     setJoinLooking(true);
     setJoinLookupError("");
     setJoinPreview(null);
@@ -94,15 +98,9 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
       setJoinLookupError(err.message ?? "Failed to look up game");
     } finally {
       setJoinLooking(false);
+      lookupInFlight.current = false;
     }
   }, []);
-
-  // Auto-lookup when a valid Game ID is pasted/set
-  useEffect(() => {
-    if (joinGameId && isValidStellarId(joinGameId) && !joinPreview && !joinLooking) {
-      doLookup(joinGameId);
-    }
-  }, [joinGameId, joinPreview, joinLooking, doLookup]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -131,10 +129,13 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
     const params = new URLSearchParams(window.location.search);
     const gameParam = params.get("game");
     if (gameParam) {
-      setJoinGameId(gameParam.trim());
+      const trimmed = gameParam.trim();
+      setJoinGameId(trimmed);
       setTab("join");
       window.history.replaceState({}, "", window.location.pathname);
+      doLookup(trimmed);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const copyLink = (gameId: string) => {
@@ -353,15 +354,20 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
                     type="text"
                     value={joinGameId}
                     onChange={(e) => {
-                      setJoinGameId(e.target.value.trim());
+                      const newId = e.target.value.trim();
+                      setJoinGameId(newId);
                       setJoinPreview(null);
                       setJoinLookupError("");
+                      lookupInFlight.current = false;
+                      if (newId && isValidStellarId(newId)) {
+                        doLookup(newId);
+                      }
                     }}
                     placeholder="Paste Game ID…"
                     className="flex-1 h-12 bg-muted border border-border rounded-md px-3 text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
                   />
                   <button
-                    onClick={() => doLookup(joinGameId)}
+                    onClick={() => doLookup(joinGameId, true)}
                     disabled={!joinGameId || !isValidStellarId(joinGameId) || joinLooking}
                     className="bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-secondary-foreground text-sm font-semibold px-4 rounded-md transition-colors"
                   >
