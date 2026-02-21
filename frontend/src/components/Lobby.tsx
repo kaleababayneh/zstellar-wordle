@@ -206,7 +206,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
       </div>
 
       {/* Tab content */}
-      <div className="bg-gray-800 rounded-b-lg border border-t-0 border-gray-600 p-4 min-h-[280px]">
+      <div className="bg-gray-800 rounded-b-lg border border-t-0 border-gray-600 p-4 min-h-70">
         {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
 
         {/* ── Open Games Tab ──────────────────────────────────────── */}
