@@ -16,6 +16,9 @@ interface ActiveGameProps {
   chainTurn: number;
   winner: string;
   letterStates: Record<string, number | undefined>;
+  toastMessage: string | null;
+  shakeRow: boolean;
+  onClearShake: () => void;
   onKey: (key: string) => void;
   onRevealWord: () => void;
   onClaimTimeout: () => void;
@@ -26,7 +29,8 @@ export function ActiveGame({
   game, currentGuess, busy,
   isMyTurn, myTimeLeft, oppTimeLeft,
   onChainPhase, chainTurn, winner,
-  letterStates, onKey,
+  letterStates, toastMessage, shakeRow, onClearShake,
+  onKey,
   onRevealWord, onClaimTimeout, onVerifyOnly,
 }: ActiveGameProps) {
   const myGridGuesses = game.myGuesses.map((g) => ({
@@ -42,7 +46,16 @@ export function ActiveGame({
   }));
 
   return (
-    <div className="flex flex-col items-center w-full max-w-lg">
+    <div className="flex flex-col items-center w-full max-w-lg relative">
+      {/* Toast (wordle-style) */}
+      {toastMessage && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
+          <div className="px-4 py-2 rounded-lg text-sm font-bold bg-foreground text-background shadow-lg whitespace-nowrap">
+            {toastMessage}
+          </div>
+        </div>
+      )}
+
       {/* Game info bar */}
       <div className="w-full flex items-center justify-between text-xs text-muted-foreground font-mono px-1 mb-3">
         <span>{game.myRole === "p1" ? "Player 1" : "Player 2"} · Turn {chainTurn}</span>
@@ -135,6 +148,8 @@ export function ActiveGame({
             guesses={myGridGuesses}
             currentGuess={isMyTurn && onChainPhase === PHASE.ACTIVE ? currentGuess : ""}
             maxRows={MAX_GUESSES}
+            shakeCurrentRow={shakeRow}
+            onShakeEnd={onClearShake}
           />
         </div>
         <div className="flex flex-col items-center">

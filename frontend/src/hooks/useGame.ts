@@ -3,6 +3,7 @@ import { PHASE } from "../config";
 import type { GameState } from "../gameState";
 import { loadGame, clearGame } from "../gameState";
 
+
 /**
  * All UI state related to the game, grouped into a single hook.
  * Provides a single `resetGame()` to return everything to defaults.
@@ -31,6 +32,20 @@ export function useGame() {
   const [oppRevealedWord, setOppRevealedWord] = useState("");
   const [drawDeadline, setDrawDeadline] = useState<number | null>(null);
   const [chainPolled, setChainPolled] = useState(false);
+
+  // Toast / shake for invalid guesses (wordle-style)
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [shakeRow, setShakeRow] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const showToast = useCallback((msg: string) => {
+    clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    setShakeRow(true);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 1500);
+  }, []);
+
+  const clearShake = useCallback(() => setShakeRow(false), []);
 
   // Refs for interval cleanup
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -134,6 +149,12 @@ export function useGame() {
 
     // Refs
     timerRef, pollRef,
+
+    // Toast / shake
+    toastMessage, setToastMessage,
+    shakeRow, setShakeRow,
+    showToast,
+    clearShake,
 
     // Helpers
     addStatus,

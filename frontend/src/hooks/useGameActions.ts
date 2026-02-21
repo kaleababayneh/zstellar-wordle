@@ -53,6 +53,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
     setWithdrawing, withdrawing,
     setMyDrawRevealed,
     addStatus,
+    showToast,
   } = gs;
 
   // ── Create Game (Player 1) ──────────────────────────────────────────
@@ -180,7 +181,10 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       addStatus("It's not your turn yet. Wait for your opponent.");
       return;
     }
-    if (currentGuess.length !== WORD_LENGTH) return;
+    if (currentGuess.length !== WORD_LENGTH) {
+      showToast("Not enough letters");
+      return;
+    }
     if (!proverReady) {
       addStatus("Prover still loading, please wait…");
       return;
@@ -194,7 +198,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
 
       const valid = await isPoseidonValidWord(currentGuess);
       if (!valid) {
-        addStatus(`"${currentGuess}" is not in the word list.`);
+        showToast("Not in a valid English word");
         setBusy(false);
         return;
       }

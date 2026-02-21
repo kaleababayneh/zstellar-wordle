@@ -36,6 +36,7 @@ function App() {
     myDrawRevealed, oppDrawRevealed,
     oppRevealedWord,
     addStatus, resetGame,
+    toastMessage, shakeRow, clearShake,
   } = gs;
 
   // Keyboard listener
@@ -88,6 +89,9 @@ function App() {
           chainTurn={chainTurn}
           winner={winner}
           letterStates={letterStates}
+          toastMessage={toastMessage}
+          shakeRow={shakeRow}
+          onClearShake={clearShake}
           onKey={actions.handleKey}
           onRevealWord={actions.handleRevealWord}
           onClaimTimeout={actions.handleClaimTimeout}

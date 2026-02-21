@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { OpenGame } from "../soroban";
 import { fetchOpenGames, queryGameState, getGameCreator } from "../soroban";
 import { isWordInList } from "../gameState";
@@ -39,12 +39,22 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
   // Create game form
   const [escrowInput, setEscrowInput] = useState("10");
   const [secretWord, setSecretWord] = useState("");
-  const [secretWordError, setSecretWordError] = useState("");
 
   // Join game form
   const [joinGameId, setJoinGameId] = useState("");
   const [joinSecretWord, setJoinSecretWord] = useState("");
-  const [joinSecretWordError, setJoinSecretWordError] = useState("");
+
+  // Toast message (wordle-style)
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [createShake, setCreateShake] = useState(false);
+  const [joinShake, setJoinShake] = useState(false);
+
+  const showToast = useCallback((msg: string) => {
+    clearTimeout(toastTimer.current);
+    setToastMsg(msg);
+    toastTimer.current = setTimeout(() => setToastMsg(null), 1500);
+  }, []);
 
   // Join game preview (looked-up info)
   const [joinPreview, setJoinPreview] = useState<{
@@ -169,6 +179,15 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
         </button>
       </div>
 
+      {/* Toast (wordle-style) */}
+      {toastMsg && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
+          <div className="px-4 py-2 rounded-lg text-sm font-bold bg-foreground text-background shadow-lg">
+            {toastMsg}
+          </div>
+        </div>
+      )}
+
       {/* Tab content */}
       <div className="min-h-60">
         {error && <p className="text-destructive text-xs mb-3">{error}</p>}
@@ -263,13 +282,12 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
                   value={secretWord}
                   onChange={(e) => {
                     setSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
-                    setSecretWordError("");
                   }}
                   placeholder="Leave blank for random"
-                  className="w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+                  className={`w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow ${createShake ? "animate-shake" : ""}`}
+                  onAnimationEnd={() => setCreateShake(false)}
                   autoFocus
                 />
-                {secretWordError && <p className="text-destructive text-sm text-center mt-1">{secretWordError}</p>}
               </div>
 
               {/* Escrow */}
@@ -293,11 +311,13 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
               <button
                 onClick={() => {
                   if (secretWord && secretWord.length !== WORD_LENGTH) {
-                    setSecretWordError(`Must be ${WORD_LENGTH} letters.`);
+                    showToast("Not enough letters");
+                    setCreateShake(true);
                     return;
                   }
                   if (secretWord && !isWordInList(secretWord)) {
-                    setSecretWordError(`"${secretWord}" is not a valid word.`);
+                    showToast("Not in a valid English word");
+                    setCreateShake(true);
                     return;
                   }
                   const escrow = parseFloat(escrowInput) || 0;
@@ -384,23 +404,24 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
                       value={joinSecretWord}
                       onChange={(e) => {
                         setJoinSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
-                        setJoinSecretWordError("");
                       }}
                       placeholder="Leave blank for random"
-                      className="w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+                      className={`w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow ${joinShake ? "animate-shake" : ""}`}
+                      onAnimationEnd={() => setJoinShake(false)}
                     />
-                    {joinSecretWordError && <p className="text-destructive text-sm text-center mt-1">{joinSecretWordError}</p>}
                   </div>
 
                   <button
                     onClick={() => {
                       if (!joinGameId) return;
                       if (joinSecretWord && joinSecretWord.length !== WORD_LENGTH) {
-                        setJoinSecretWordError(`Must be ${WORD_LENGTH} letters.`);
+                        showToast("Not enough letters");
+                        setJoinShake(true);
                         return;
                       }
                       if (joinSecretWord && !isWordInList(joinSecretWord)) {
-                        setJoinSecretWordError(`"${joinSecretWord}" is not valid.`);
+                        showToast("Not in a valid English word");
+                        setJoinShake(true);
                         return;
                       }
                       onJoinGame(joinGameId, joinSecretWord || undefined);

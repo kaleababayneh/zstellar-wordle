@@ -8,6 +8,8 @@ interface WordleGridProps {
   }>;
   currentGuess: string;
   maxRows?: number;
+  shakeCurrentRow?: boolean;
+  onShakeEnd?: () => void;
 }
 
 /** Map result number → CSS class for the back face */
@@ -80,6 +82,8 @@ export const WordleGrid = memo(function WordleGrid({
   guesses,
   currentGuess,
   maxRows = 6,
+  shakeCurrentRow = false,
+  onShakeEnd,
 }: WordleGridProps) {
   const emptyCellClass =
     "w-[58px] h-[58px] sm:w-[62px] sm:h-[62px] border-2 flex items-center justify-center text-2xl sm:text-3xl font-bold uppercase select-none border-border bg-transparent text-transparent";
@@ -108,7 +112,11 @@ export const WordleGrid = memo(function WordleGrid({
   // Current guess row
   if (guesses.length < maxRows) {
     rows.push(
-      <div key="current" className="flex gap-[5px] justify-center">
+      <div
+        key="current"
+        className={`flex gap-[5px] justify-center ${shakeCurrentRow ? "animate-shake" : ""}`}
+        onAnimationEnd={onShakeEnd}
+      >
         {Array.from({ length: 5 }).map((_, j) => (
           <div
             key={j}
