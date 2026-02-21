@@ -10,34 +10,37 @@ const ROWS = [
 ];
 
 export function Keyboard({ onKey, letterStates }: KeyboardProps) {
-  const keyColor = (key: string): string => {
-    const base =
-      "rounded font-semibold transition-colors duration-200 flex items-center justify-center";
+  const keyClass = (key: string): string => {
     const state = letterStates[key];
-    if (state === 2)
-      return `${base} bg-green-600 text-white`;
-    if (state === 1)
-      return `${base} bg-yellow-500 text-white`;
-    if (state === 0)
-      return `${base} bg-gray-700 text-gray-400`;
-    return `${base} bg-gray-500 text-white hover:bg-gray-400`;
+    const base =
+      "flex items-center justify-center rounded-md font-semibold uppercase select-none transition-all duration-150 active:scale-95";
+    const size = key.length > 1
+      ? "min-w-[60px] sm:min-w-[68px] px-2 h-[52px] sm:h-[58px] text-xs sm:text-sm"
+      : "min-w-[30px] sm:min-w-[36px] flex-1 h-[52px] sm:h-[58px] text-sm sm:text-base";
+    if (state === 2) return `${base} ${size} bg-correct text-background`;
+    if (state === 1) return `${base} ${size} bg-present text-background`;
+    if (state === 0) return `${base} ${size} bg-absent text-muted-foreground`;
+    return `${base} ${size} bg-secondary text-secondary-foreground hover:bg-secondary/80`;
   };
 
   return (
-    <div className="flex flex-col items-center gap-1 mt-4">
+    <div className="flex flex-col items-center gap-1.5 w-full max-w-lg px-1.5 mt-4" role="group" aria-label="Keyboard">
       {ROWS.map((row, ri) => (
-        <div key={ri} className="flex gap-1">
+        <div key={ri} className="flex gap-1 sm:gap-1.5 w-full justify-center">
+          {ri === 2 && <div className="w-0" />}
           {row.map((key) => (
             <button
               key={key}
               onClick={() => onKey(key)}
-              className={`${keyColor(key)} ${
-                key.length > 1 ? "px-3 py-3 text-xs" : "w-9 h-12 text-sm"
-              }`}
+              className={keyClass(key)}
+              aria-label={key === "Enter" ? "Submit guess" : key === "⌫" ? "Delete letter" : key}
             >
-              {key}
+              {key === "⌫" ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>
+              ) : key}
             </button>
           ))}
+          {ri === 2 && <div className="w-0" />}
         </div>
       ))}
     </div>

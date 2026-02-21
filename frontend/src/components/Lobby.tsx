@@ -16,17 +16,17 @@ interface LobbyProps {
 const phaseLabel = (phase: number): { text: string; color: string } => {
   switch (phase) {
     case PHASE.WAITING:
-      return { text: "Waiting for P2", color: "bg-yellow-900/50 text-yellow-300 border-yellow-600" };
+      return { text: "Waiting for P2", color: "bg-accent/20 text-accent border-accent/40" };
     case PHASE.ACTIVE:
-      return { text: "In Progress", color: "bg-blue-900/50 text-blue-300 border-blue-500" };
+      return { text: "In Progress", color: "bg-primary/20 text-primary border-primary/40" };
     case PHASE.REVEAL:
-      return { text: "Reveal Phase", color: "bg-purple-900/50 text-purple-300 border-purple-500" };
+      return { text: "Reveal Phase", color: "bg-ring/20 text-ring border-ring/40" };
     case PHASE.FINALIZED:
-      return { text: "Finished", color: "bg-gray-800 text-gray-400 border-gray-600" };
+      return { text: "Finished", color: "bg-muted text-muted-foreground border-border" };
     case PHASE.DRAW:
-      return { text: "Draw", color: "bg-orange-900/50 text-orange-300 border-orange-600" };
+      return { text: "Draw", color: "bg-accent/20 text-accent border-accent/40" };
     default:
-      return { text: "Expired", color: "bg-gray-800 text-gray-500 border-gray-700" };
+      return { text: "Expired", color: "bg-muted text-muted-foreground border-border" };
   }
 };
 
@@ -161,10 +161,10 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
   };
 
   const tabClass = (t: Tab) =>
-    `px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+    `px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
       tab === t
-        ? "bg-gray-800 text-white border-t border-l border-r border-gray-600"
-        : "bg-gray-900 text-gray-400 hover:text-gray-200 border-b border-gray-600"
+        ? "bg-card text-foreground border-t border-l border-r border-border"
+        : "bg-transparent text-muted-foreground hover:text-foreground border-b border-border"
     }`;
 
   // Active (non-finished) my games
@@ -174,12 +174,12 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
   return (
     <div className="w-full max-w-2xl">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-600 mb-0">
+      <div className="flex border-b border-border mb-0">
         <button className={tabClass("open")} onClick={() => setTab("open")}>
-          Open Games {openGames.length > 0 && <span className="ml-1 bg-green-600 text-white text-xs px-1.5 py-0.5 rounded-full">{openGames.length}</span>}
+          Open Games {openGames.length > 0 && <span className="ml-1 bg-primary text-primary-foreground text-xs px-1.5 py-0.5 rounded-full">{openGames.length}</span>}
         </button>
         <button className={tabClass("my")} onClick={() => setTab("my")}>
-          My Games {activeMyGames.length > 0 && <span className="ml-1 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">{activeMyGames.length}</span>}
+          My Games {activeMyGames.length > 0 && <span className="ml-1 bg-ring text-primary-foreground text-xs px-1.5 py-0.5 rounded-full">{activeMyGames.length}</span>}
         </button>
         <button className={tabClass("create")} onClick={() => setTab("create")}>
           Create
@@ -187,11 +187,11 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
         <button className={tabClass("join")} onClick={() => setTab("join")}>
           Join
         </button>
-        <div className="flex-1 border-b border-gray-600" />
+        <div className="flex-1 border-b border-border" />
         <button
           onClick={refresh}
           disabled={loading}
-          className="px-3 py-1 text-xs text-gray-400 hover:text-white disabled:opacity-50 self-center"
+          className="px-3 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 self-center transition-colors"
           title="Refresh"
         >
           {loading ? (
@@ -206,18 +206,18 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
       </div>
 
       {/* Tab content */}
-      <div className="bg-gray-800 rounded-b-lg border border-t-0 border-gray-600 p-4 min-h-70">
-        {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+      <div className="bg-card rounded-b-lg border border-t-0 border-border p-4 min-h-70">
+        {error && <p className="text-destructive text-xs mb-3">{error}</p>}
 
         {/* ── Open Games Tab ──────────────────────────────────────── */}
         {tab === "open" && (
           <>
             {!loading && openGames.length === 0 && (
               <div className="text-center py-8">
-                <p className="text-gray-500 text-sm mb-2">No open games right now.</p>
+                <p className="text-muted-foreground text-sm mb-2">No open games right now.</p>
                 <button
                   onClick={() => setTab("create")}
-                  className="text-blue-400 hover:text-blue-300 text-sm underline"
+                  className="text-primary hover:text-primary/80 text-sm underline transition-colors"
                 >
                   Create one to get started
                 </button>
@@ -227,34 +227,34 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
               {openGames.map((game) => (
                 <div
                   key={game.gameId}
-                  className="flex items-center justify-between bg-gray-900 rounded-lg px-4 py-3 border border-gray-700 hover:border-gray-500 transition-colors"
+                  className="flex items-center justify-between bg-muted rounded-lg px-4 py-3 border border-border hover:border-muted-foreground/30 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs px-2 py-0.5 rounded border bg-yellow-900/50 text-yellow-300 border-yellow-600">
+                      <span className="text-xs px-2 py-0.5 rounded border bg-accent/20 text-accent border-accent/40">
                         Waiting for P2
                       </span>
                       {game.escrowXlm > 0 && (
-                        <span className="text-yellow-400 text-xs font-medium">
+                        <span className="text-accent text-xs font-medium">
                           {game.escrowXlm} XLM
                         </span>
                       )}
                       {game.escrowXlm === 0 && (
-                        <span className="text-gray-500 text-xs">No escrow</span>
+                        <span className="text-muted-foreground text-xs">No escrow</span>
                       )}
                     </div>
-                    <p className="text-gray-400 text-xs">
-                      Created by <span className="text-green-400 font-mono">{formatAddr(game.creator)}</span>
-                      {game.createdAt && <span className="ml-2 text-gray-600">{timeAgo(game.createdAt)}</span>}
+                    <p className="text-muted-foreground text-xs">
+                      Created by <span className="text-primary font-mono">{formatAddr(game.creator)}</span>
+                      {game.createdAt && <span className="ml-2 text-muted-foreground/60">{timeAgo(game.createdAt)}</span>}
                     </p>
-                    <p className="text-gray-600 font-mono text-[10px] truncate mt-0.5">
+                    <p className="text-muted-foreground/50 font-mono text-[10px] truncate mt-0.5">
                       {game.gameId}
                     </p>
                   </div>
                   <div className="flex gap-2 ml-3 shrink-0">
                     <button
                       onClick={() => copyLink(game.gameId)}
-                      className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1.5 rounded"
+                      className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-2 py-1.5 rounded-md transition-colors"
                       title="Copy join link"
                     >
                       🔗
@@ -270,7 +270,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                         setJoinLookupError("");
                         setTab("join");
                       }}
-                      className="text-xs bg-green-600 hover:bg-green-500 text-white font-bold px-4 py-1.5 rounded"
+                      className="text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-4 py-1.5 rounded-md transition-colors"
                     >
                       Join
                     </button>
@@ -286,10 +286,10 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
           <>
             {myGameSummaries.length === 0 && !loading && (
               <div className="text-center py-8">
-                <p className="text-gray-500 text-sm mb-2">You haven't created or joined any games yet.</p>
+                <p className="text-muted-foreground text-sm mb-2">You haven't created or joined any games yet.</p>
                 <button
                   onClick={() => setTab("create")}
-                  className="text-blue-400 hover:text-blue-300 text-sm underline"
+                  className="text-primary hover:text-primary/80 text-sm underline transition-colors"
                 >
                   Create your first game
                 </button>
@@ -299,7 +299,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
             {/* Active games */}
             {activeMyGames.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Active Games</h3>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Active Games</h3>
                 <div className="space-y-2">
                   {activeMyGames.map((game) => {
                     const pl = phaseLabel(game.phase);
@@ -307,7 +307,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                     return (
                       <div
                         key={game.gameId}
-                        className="flex items-center justify-between bg-gray-900 rounded-lg px-4 py-3 border border-gray-700 hover:border-gray-500 transition-colors"
+                        className="flex items-center justify-between bg-muted rounded-lg px-4 py-3 border border-border hover:border-muted-foreground/30 transition-colors"
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
@@ -315,15 +315,15 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                               {pl.text}
                             </span>
                             {entry && (
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-muted-foreground">
                                 You: {entry.role === "p1" ? "Player 1" : "Player 2"}
                               </span>
                             )}
                             {game.escrowXlm > 0 && (
-                              <span className="text-yellow-400 text-xs">{game.escrowXlm} XLM</span>
+                              <span className="text-accent text-xs">{game.escrowXlm} XLM</span>
                             )}
                           </div>
-                          <p className="text-gray-600 font-mono text-[10px] truncate">
+                          <p className="text-muted-foreground/50 font-mono text-[10px] truncate">
                             {game.gameId}
                           </p>
                         </div>
@@ -331,7 +331,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                           {game.phase === PHASE.WAITING && (
                             <button
                               onClick={() => copyLink(game.gameId)}
-                              className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1.5 rounded"
+                              className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-2 py-1.5 rounded-md transition-colors"
                               title="Copy invite link"
                             >
                               🔗 Share
@@ -339,7 +339,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                           )}
                           <button
                             onClick={() => onResumeGame(game.gameId)}
-                            className="text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-1.5 rounded"
+                            className="text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-4 py-1.5 rounded-md transition-colors"
                           >
                             {game.phase === PHASE.WAITING ? "View" : "Play"}
                           </button>
@@ -354,26 +354,26 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
             {/* Finished games */}
             {finishedMyGames.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Finished Games</h3>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Finished Games</h3>
                 <div className="space-y-2">
                   {finishedMyGames.map((game) => (
                     <div
                       key={game.gameId}
-                      className="flex items-center justify-between bg-gray-900/50 rounded-lg px-4 py-2 border border-gray-700/50"
+                      className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-2 border border-border/50"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-xs px-2 py-0.5 rounded border bg-gray-800 text-gray-500 border-gray-700">
+                          <span className="text-xs px-2 py-0.5 rounded border bg-muted text-muted-foreground border-border">
                             Finished
                           </span>
                         </div>
-                        <p className="text-gray-600 font-mono text-[10px] truncate">
+                        <p className="text-muted-foreground/50 font-mono text-[10px] truncate">
                           {game.gameId}
                         </p>
                       </div>
                       <button
                         onClick={() => removeMyGameEntry(game.gameId)}
-                        className="text-xs text-gray-600 hover:text-red-400 px-2 py-1"
+                        className="text-xs text-muted-foreground hover:text-destructive px-2 py-1 transition-colors"
                         title="Remove from list"
                       >
                         ✕
@@ -389,11 +389,11 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
         {/* ── Create Game Tab ─────────────────────────────────────── */}
         {tab === "create" && (
           <div className="max-w-md mx-auto">
-            <h3 className="text-lg font-bold mb-4">Create New Game</h3>
+            <h3 className="text-lg font-bold mb-4 text-foreground">Create New Game</h3>
 
             {/* Escrow */}
             <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-1">Escrow Amount</label>
+              <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Escrow Amount</label>
               <div className="flex gap-2 items-center">
                 <input
                   type="number"
@@ -402,16 +402,16 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                   value={escrowInput}
                   onChange={(e) => setEscrowInput(e.target.value)}
                   placeholder="0"
-                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-white"
+                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
                 />
-                <span className="text-gray-400 text-sm">XLM</span>
+                <span className="text-muted-foreground text-sm font-medium">XLM</span>
               </div>
-              <p className="text-gray-600 text-xs mt-1">Both players must deposit. Winner takes the pot.</p>
+              <p className="text-muted-foreground/70 text-xs mt-1.5">Both players must deposit. Winner takes the pot.</p>
             </div>
 
             {/* Secret word */}
             <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-1">Secret Word (optional)</label>
+              <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Secret Word (optional)</label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -422,11 +422,11 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                     setSecretWordError("");
                   }}
                   placeholder="Leave blank for random…"
-                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm tracking-widest font-mono uppercase"
+                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm tracking-widest font-mono uppercase focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
                 />
               </div>
-              {secretWordError && <p className="text-red-400 text-xs mt-1">{secretWordError}</p>}
-              <p className="text-gray-600 text-xs mt-1">Your opponent will try to guess this word.</p>
+              {secretWordError && <p className="text-destructive text-xs mt-1">{secretWordError}</p>}
+              <p className="text-muted-foreground/70 text-xs mt-1.5">Your opponent will try to guess this word.</p>
             </div>
 
             <div className="flex gap-2">
@@ -443,7 +443,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                   const escrow = parseFloat(escrowInput) || 0;
                   onCreateGame(escrow, secretWord || undefined);
                 }}
-                className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-sm"
+                className="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold px-6 py-3 rounded-lg text-sm transition-colors"
               >
                 {secretWord ? `Create with "${secretWord.toUpperCase()}"` : "Create with Random Word"}
               </button>
@@ -454,11 +454,11 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
         {/* ── Join Game Tab ────────────────────────────────────────── */}
         {tab === "join" && (
           <div className="max-w-md mx-auto">
-            <h3 className="text-lg font-bold mb-4">Join Game</h3>
+            <h3 className="text-lg font-bold mb-4 text-foreground">Join Game</h3>
 
             {/* Game ID */}
             <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-1">Game ID</label>
+              <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Game ID</label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -469,42 +469,42 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                     setJoinLookupError("");
                   }}
                   placeholder="Paste Game ID…"
-                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono"
+                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
                 />
                 <button
                   onClick={() => doLookup(joinGameId)}
                   disabled={!joinGameId || !isValidStellarId(joinGameId) || joinLooking}
-                  className="bg-gray-600 hover:bg-gray-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded"
+                  className="bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-secondary-foreground text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
                 >
                   {joinLooking ? "Looking up…" : "Look up"}
                 </button>
               </div>
-              {joinLookupError && <p className="text-red-400 text-xs mt-1">{joinLookupError}</p>}
+              {joinLookupError && <p className="text-destructive text-xs mt-1">{joinLookupError}</p>}
             </div>
 
             {/* Preview card: show escrow + creator when looked up */}
             {joinPreview && (
-              <div className="mb-4 bg-gray-900 border border-gray-600 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-300 mb-2">Game Details</h4>
+              <div className="mb-4 bg-muted border border-border rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-foreground mb-2">Game Details</h4>
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="text-xs px-2 py-0.5 rounded border bg-yellow-900/50 text-yellow-300 border-yellow-600">
+                  <span className="text-xs px-2 py-0.5 rounded border bg-accent/20 text-accent border-accent/40">
                     Waiting for P2
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="text-gray-500 text-xs">Created by</span>
-                    <p className="text-green-400 font-mono text-xs">{formatAddr(joinPreview.creator)}</p>
+                    <span className="text-muted-foreground text-xs">Created by</span>
+                    <p className="text-primary font-mono text-xs">{formatAddr(joinPreview.creator)}</p>
                   </div>
                   <div>
-                    <span className="text-gray-500 text-xs">Escrow (per player)</span>
-                    <p className={`font-medium text-sm ${joinPreview.escrowXlm > 0 ? "text-yellow-400" : "text-gray-400"}`}>
+                    <span className="text-muted-foreground text-xs">Escrow (per player)</span>
+                    <p className={`font-medium text-sm ${joinPreview.escrowXlm > 0 ? "text-accent" : "text-muted-foreground"}`}>
                       {joinPreview.escrowXlm > 0 ? `${joinPreview.escrowXlm} XLM` : "No escrow"}
                     </p>
                   </div>
                 </div>
                 {joinPreview.escrowXlm > 0 && (
-                  <p className="text-yellow-500/80 text-xs mt-2">
+                  <p className="text-accent/70 text-xs mt-2">
                     You will deposit <strong>{joinPreview.escrowXlm} XLM</strong> to match Player 1's escrow. Winner takes the full pot ({joinPreview.escrowXlm * 2} XLM).
                   </p>
                 )}
@@ -515,7 +515,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
             {joinPreview && (
               <>
                 <div className="mb-4">
-                  <label className="block text-gray-400 text-sm mb-1">Your Secret Word (optional)</label>
+                  <label className="block text-muted-foreground text-sm mb-1.5 font-medium">Your Secret Word (optional)</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -526,10 +526,10 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                         setJoinSecretWordError("");
                       }}
                       placeholder="Leave blank for random…"
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm tracking-widest font-mono uppercase"
+                      className="flex-1 bg-input border border-border rounded-lg px-3 py-2.5 text-sm tracking-widest font-mono uppercase focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
                     />
                   </div>
-                  {joinSecretWordError && <p className="text-red-400 text-xs mt-1">{joinSecretWordError}</p>}
+                  {joinSecretWordError && <p className="text-destructive text-xs mt-1">{joinSecretWordError}</p>}
                 </div>
 
                 <button
@@ -546,7 +546,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                     onJoinGame(joinGameId, joinSecretWord || undefined);
                   }}
                   disabled={!joinGameId}
-                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-lg text-sm"
+                  className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold px-6 py-3 rounded-lg text-sm transition-colors"
                 >
                   {joinSecretWord
                     ? `Join with "${joinSecretWord.toUpperCase()}" (deposit ${joinPreview.escrowXlm > 0 ? joinPreview.escrowXlm + " XLM" : "no escrow"})`

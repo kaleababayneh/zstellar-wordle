@@ -13,14 +13,14 @@ export function WaitingPhase({ game }: WaitingPhaseProps) {
   const shareUrl = `${window.location.origin}${window.location.pathname}?game=${game.gameId}`;
 
   return (
-    <div className="mb-6 text-center">
-      <div className="bg-yellow-900/40 border border-yellow-600 rounded-lg p-4 mb-3 max-w-md">
-        <p className="text-yellow-300 font-medium mb-2">Waiting for Player 2 to join…</p>
-        <p className="text-gray-400 text-xs mb-2">Share this link or Game ID with your opponent:</p>
+    <div className="mb-6 text-center animate-fade-in-up">
+      <div className="bg-accent/15 border border-accent/40 rounded-lg p-5 mb-3 max-w-md">
+        <p className="text-accent font-semibold mb-2">Waiting for Player 2 to join…</p>
+        <p className="text-muted-foreground text-xs mb-3">Share this link or Game ID with your opponent:</p>
 
         {/* Shareable link */}
-        <div className="flex items-center gap-2 bg-gray-800 p-2 rounded mb-2">
-          <p className="text-blue-400 font-mono text-xs break-all flex-1 select-all">
+        <div className="flex items-center gap-2 bg-muted p-2.5 rounded-lg mb-2">
+          <p className="text-primary font-mono text-xs break-all flex-1 select-all">
             {shareUrl}
           </p>
           <button
@@ -29,15 +29,15 @@ export function WaitingPhase({ game }: WaitingPhaseProps) {
               setCopiedLink(true);
               setTimeout(() => setCopiedLink(false), 2000);
             }}
-            className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded whitespace-nowrap"
+            className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-2.5 py-1.5 rounded-md whitespace-nowrap transition-colors font-medium"
           >
             {copiedLink ? "Copied!" : "Copy Link"}
           </button>
         </div>
 
         {/* Game ID */}
-        <div className="flex items-center gap-2 bg-gray-800 p-2 rounded">
-          <p className="text-green-400 font-mono text-xs break-all flex-1 select-all">
+        <div className="flex items-center gap-2 bg-muted p-2.5 rounded-lg">
+          <p className="text-primary font-mono text-xs break-all flex-1 select-all">
             {game.gameId}
           </p>
           <button
@@ -46,17 +46,17 @@ export function WaitingPhase({ game }: WaitingPhaseProps) {
               setCopiedId(true);
               setTimeout(() => setCopiedId(false), 2000);
             }}
-            className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded whitespace-nowrap"
+            className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-2.5 py-1.5 rounded-md whitespace-nowrap transition-colors font-medium"
           >
             {copiedId ? "Copied!" : "Copy ID"}
           </button>
         </div>
 
         {game.escrowAmount > 0 && (
-          <p className="text-gray-400 text-xs mt-2">Escrow: {game.escrowAmount} XLM</p>
+          <p className="text-muted-foreground text-xs mt-3">Escrow: {game.escrowAmount} XLM</p>
         )}
 
-        <div className="mt-3 flex items-center justify-center gap-2 text-gray-400 text-xs">
+        <div className="mt-3 flex items-center justify-center gap-2 text-muted-foreground text-xs">
           <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
             <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />

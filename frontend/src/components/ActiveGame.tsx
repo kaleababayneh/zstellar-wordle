@@ -44,22 +44,22 @@ export function ActiveGame({
   return (
     <>
       {/* Timers */}
-      <div className="flex gap-4 mb-4">
+      <div className="flex gap-3 mb-4">
         <div
-          className={`px-4 py-2 rounded-lg font-mono text-sm ${
+          className={`px-4 py-2.5 rounded-lg font-mono text-sm border transition-colors ${
             isMyTurn
-              ? "bg-green-900/50 border border-green-600 text-green-300"
-              : "bg-gray-800 border border-gray-600 text-gray-400"
+              ? "bg-primary/15 border-primary/40 text-primary"
+              : "bg-card border-border text-muted-foreground"
           }`}
         >
           You: {formatTime(myTimeLeft ?? 0)}
           {isMyTurn && " (your turn)"}
         </div>
         <div
-          className={`px-4 py-2 rounded-lg font-mono text-sm ${
+          className={`px-4 py-2.5 rounded-lg font-mono text-sm border transition-colors ${
             !isMyTurn
-              ? "bg-red-900/50 border border-red-600 text-red-300"
-              : "bg-gray-800 border border-gray-600 text-gray-400"
+              ? "bg-destructive/15 border-destructive/40 text-destructive-foreground"
+              : "bg-card border-border text-muted-foreground"
           }`}
         >
           Opponent: {formatTime(oppTimeLeft ?? 0)}
@@ -68,7 +68,7 @@ export function ActiveGame({
       </div>
 
       {/* Game info */}
-      <div className="text-gray-500 text-xs mb-4">
+      <div className="text-muted-foreground text-xs mb-4 font-mono">
         Role: {game.myRole === "p1" ? "Player 1" : "Player 2"}
         {" | Turn "}{chainTurn}
         {game.escrowAmount > 0 && ` | Pot: ${game.escrowAmount * 2} XLM`}
@@ -76,7 +76,7 @@ export function ActiveGame({
 
       {/* Waiting for opponent */}
       {!isMyTurn && onChainPhase === PHASE.ACTIVE && (
-        <div className="mb-4 px-4 py-2 bg-blue-900/30 border border-blue-600 rounded text-blue-300 text-sm flex items-center gap-2">
+        <div className="mb-4 px-4 py-2.5 bg-card border border-border rounded-lg text-muted-foreground text-sm flex items-center gap-2">
           <Spinner size={4} />
           Waiting for opponent's move…
         </div>
@@ -84,21 +84,21 @@ export function ActiveGame({
 
       {/* Reveal phase */}
       {onChainPhase === PHASE.REVEAL && (
-        <div className="mb-4 px-4 py-3 bg-purple-900/50 border border-purple-500 rounded-lg max-w-md text-center">
+        <div className="mb-4 px-5 py-4 bg-card border border-border rounded-lg max-w-md text-center">
           {winner === game.myAddress ? (
             <>
-              <p className="text-purple-300 font-bold mb-2">You won! Reveal your word to claim the pot.</p>
+              <p className="text-primary font-bold mb-3">You won! Reveal your word to claim the pot.</p>
               <button
                 onClick={onRevealWord}
                 disabled={busy}
-                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded"
+                className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold px-5 py-2.5 rounded-lg transition-colors"
               >
                 {busy ? "Revealing…" : `Reveal "${game.word.toUpperCase()}"`}
               </button>
             </>
           ) : (
             <>
-              <p className="text-yellow-300 font-medium">Opponent must reveal their word…</p>
+              <p className="text-accent font-medium">Opponent must reveal their word…</p>
             </>
           )}
         </div>
@@ -110,7 +110,7 @@ export function ActiveGame({
           <button
             onClick={onClaimTimeout}
             disabled={busy}
-            className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded"
+            className="bg-destructive hover:bg-destructive/90 disabled:opacity-50 text-destructive-foreground font-bold px-5 py-2.5 rounded-lg transition-colors"
           >
             Claim Timeout Win
           </button>
@@ -123,18 +123,18 @@ export function ActiveGame({
           <button
             onClick={onVerifyOnly}
             disabled={busy}
-            className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded"
+            className="bg-accent hover:bg-accent/90 disabled:opacity-50 text-accent-foreground font-bold px-5 py-2.5 rounded-lg transition-colors"
           >
             {busy ? "Verifying…" : "Submit Final Verification"}
           </button>
-          <p className="text-gray-500 text-xs mt-1">No more guesses — only verifying opponent's last guess.</p>
+          <p className="text-muted-foreground text-xs mt-1.5">No more guesses — only verifying opponent's last guess.</p>
         </div>
       )}
 
       {/* Grids */}
       <div className="flex gap-6 mb-4 flex-wrap justify-center">
         <div className="flex flex-col items-center">
-          <p className="text-gray-400 text-xs mb-1">Your Guesses</p>
+          <p className="text-muted-foreground text-xs mb-2 font-medium">Your Guesses</p>
           <WordleGrid
             guesses={myGridGuesses}
             currentGuess={isMyTurn && onChainPhase === PHASE.ACTIVE ? currentGuess : ""}
@@ -142,7 +142,7 @@ export function ActiveGame({
           />
         </div>
         <div className="flex flex-col items-center">
-          <p className="text-gray-400 text-xs mb-1">Opponent's Guesses</p>
+          <p className="text-muted-foreground text-xs mb-2 font-medium">Opponent's Guesses</p>
           <WordleGrid
             guesses={opponentGridGuesses}
             currentGuess=""
@@ -158,7 +158,7 @@ export function ActiveGame({
 
       {/* Busy spinner */}
       {busy && (
-        <div className="mt-4 flex items-center gap-2 text-yellow-400">
+        <div className="mt-4 flex items-center gap-2 text-accent">
           <Spinner size={5} />
           Processing…
         </div>

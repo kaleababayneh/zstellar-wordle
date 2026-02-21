@@ -82,9 +82,9 @@ export const WordleGrid = memo(function WordleGrid({
   maxRows = 6,
 }: WordleGridProps) {
   const emptyCellClass =
-    "w-14 h-14 border-2 flex items-center justify-center text-xl font-bold uppercase rounded bg-white/5 border-gray-600 text-transparent";
+    "w-14 h-14 sm:w-[62px] sm:h-[62px] border-2 flex items-center justify-center text-xl sm:text-2xl font-bold uppercase rounded-md bg-transparent border-border text-transparent";
   const typingCellClass =
-    "w-14 h-14 border-2 flex items-center justify-center text-xl font-bold uppercase rounded bg-white/10 border-gray-400 text-white tile-pop";
+    "w-14 h-14 sm:w-[62px] sm:h-[62px] border-2 flex items-center justify-center text-xl sm:text-2xl font-bold uppercase rounded-md bg-transparent border-muted-foreground text-foreground tile-pop";
 
   const rows: React.ReactNode[] = [];
 

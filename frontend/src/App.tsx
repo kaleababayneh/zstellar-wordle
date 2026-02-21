@@ -50,12 +50,14 @@ function App() {
   }, [actions.handleKey]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center py-6 px-4">
+    <div className="flex flex-col items-center min-h-dvh bg-background text-foreground">
       <Header wallet={wallet} addStatus={addStatus} proverReady={proverReady} />
+
+      <div className="relative flex-1 flex flex-col items-center w-full max-w-2xl px-4 py-6">
 
       {/* Lobby */}
       {!game && wallet.address && (
-        <div className="mb-6 flex flex-col items-center w-full">
+        <div className="mb-6 flex flex-col items-center w-full animate-fade-in-up">
           <Lobby
             currentAddress={wallet.address}
             onJoinGame={(gameId, customWord) => actions.handleJoinGame(gameId, customWord)}
@@ -129,16 +131,17 @@ function App() {
       <StatusBar messages={status} />
 
       {/* Legend */}
-      <div className="mt-6 flex gap-4 text-xs text-gray-500">
-        <span className="flex items-center gap-1">
-          <span className="w-4 h-4 bg-green-600 rounded inline-block" /> Correct
+      <div className="mt-6 flex gap-5 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 bg-correct rounded-sm inline-block" /> Correct
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-4 h-4 bg-yellow-500 rounded inline-block" /> Wrong pos
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 bg-present rounded-sm inline-block" /> Wrong pos
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-4 h-4 bg-gray-700 rounded inline-block" /> Absent
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 bg-absent rounded-sm inline-block" /> Absent
         </span>
+      </div>
       </div>
     </div>
   );

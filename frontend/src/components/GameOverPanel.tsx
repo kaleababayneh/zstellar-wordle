@@ -15,29 +15,29 @@ export function GameOverPanel({
   withdrawing, onWithdraw, onNewGame,
 }: GameOverPanelProps) {
   return (
-    <div className="mt-4 flex flex-col items-center gap-3 max-w-md">
+    <div className="mt-4 flex flex-col items-center gap-3 max-w-md animate-fade-in-up">
       <div
-        className={`px-6 py-3 rounded-lg text-center ${
+        className={`px-6 py-4 rounded-lg text-center w-full border ${
           gameWon
-            ? "bg-green-900/50 border border-green-600"
+            ? "bg-correct/15 border-correct/40"
             : !winner
-              ? "bg-yellow-900/50 border border-yellow-600"
-              : "bg-red-900/50 border border-red-600"
+              ? "bg-accent/15 border-accent/40"
+              : "bg-destructive/15 border-destructive/40"
         }`}
       >
         {gameWon ? (
-          <p className="text-green-300 font-bold text-lg">You Won!</p>
+          <p className="text-correct font-bold text-lg">You Won!</p>
         ) : !winner ? (
-          <p className="text-yellow-300 font-bold text-lg">Draw!</p>
+          <p className="text-accent font-bold text-lg">Draw!</p>
         ) : (
-          <p className="text-red-300 font-bold text-lg">You Lost</p>
+          <p className="text-destructive font-bold text-lg">You Lost</p>
         )}
-        <p className="text-gray-400 text-sm mt-1">
-          Your word: <span className="font-mono font-bold text-white">{game.word.toUpperCase()}</span>
+        <p className="text-muted-foreground text-sm mt-2">
+          Your word: <span className="font-mono font-bold text-foreground">{game.word.toUpperCase()}</span>
         </p>
         {oppRevealedWord && (
-          <p className="text-gray-400 text-sm mt-1">
-            Opponent's word: <span className="font-mono font-bold text-white">{oppRevealedWord.toUpperCase()}</span>
+          <p className="text-muted-foreground text-sm mt-1">
+            Opponent's word: <span className="font-mono font-bold text-foreground">{oppRevealedWord.toUpperCase()}</span>
           </p>
         )}
       </div>
@@ -47,18 +47,18 @@ export function GameOverPanel({
         <button
           onClick={onWithdraw}
           disabled={withdrawing}
-          className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg"
+          className="w-full bg-accent hover:bg-accent/90 disabled:opacity-50 text-accent-foreground font-bold px-5 py-2.5 rounded-lg transition-colors"
         >
           {withdrawing ? "Withdrawing…" : `Withdraw ${gameWon ? game.escrowAmount * 2 : game.escrowAmount} XLM`}
         </button>
       )}
       {game.escrowWithdrawn && (
-        <p className="text-green-400 text-sm">Escrow withdrawn ✓</p>
+        <p className="text-primary text-sm font-medium">Escrow withdrawn ✓</p>
       )}
 
       <button
         onClick={onNewGame}
-        className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 rounded-lg"
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 py-2.5 rounded-lg transition-colors"
       >
         New Game
       </button>

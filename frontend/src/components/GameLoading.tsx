@@ -13,22 +13,22 @@ export function GameLoading({ chainPolled, onBackToLobby }: GameLoadingProps) {
       <div
         className={`border rounded-lg p-6 max-w-md flex flex-col items-center gap-3 ${
           chainPolled
-            ? "bg-red-900/30 border-red-700"
-            : "bg-gray-800 border-gray-600"
+            ? "bg-destructive/15 border-destructive/40"
+            : "bg-card border-border"
         }`}
       >
         {!chainPolled ? (
           <>
-            <svg className="animate-spin h-6 w-6 text-gray-400" viewBox="0 0 24 24" fill="none">
+            <svg className="animate-spin h-6 w-6 text-muted-foreground" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
               <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
             </svg>
-            <p className="text-gray-400 text-sm">Loading game state from chain…</p>
+            <p className="text-muted-foreground text-sm">Loading game state from chain…</p>
           </>
         ) : (
           <>
-            <p className="text-red-300 font-bold text-lg">Game Not Found</p>
-            <p className="text-gray-400 text-sm text-center">
+            <p className="text-destructive-foreground font-bold text-lg">Game Not Found</p>
+            <p className="text-muted-foreground text-sm text-center">
               This game no longer exists on-chain. It may have expired or was created on a previous contract.
             </p>
           </>
@@ -37,8 +37,8 @@ export function GameLoading({ chainPolled, onBackToLobby }: GameLoadingProps) {
           onClick={onBackToLobby}
           className={
             chainPolled
-              ? "mt-2 bg-gray-700 hover:bg-gray-600 text-white font-bold px-5 py-2 rounded-lg text-sm"
-              : "mt-2 text-xs text-gray-500 hover:text-gray-300 underline"
+              ? "mt-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold px-5 py-2 rounded-lg text-sm transition-colors"
+              : "mt-2 text-xs text-muted-foreground hover:text-foreground underline transition-colors"
           }
         >
           Back to lobby
