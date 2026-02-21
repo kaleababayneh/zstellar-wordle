@@ -178,9 +178,11 @@ export function updateMyGuessResults(guessIndex: number, results: number[]): voi
     saveToStorage(state);
 }
 
-export function addOpponentGuess(guess: GuessEntry): void {
+export function addOpponentGuess(guess: GuessEntry, expectedCount?: number): void {
     const state = loadGame();
     if (!state) return;
+    // Guard: if expectedCount is provided, only add if we haven't reached it yet
+    if (expectedCount !== undefined && state.opponentGuesses.length >= expectedCount) return;
     state.opponentGuesses.push(guess);
     saveToStorage(state);
 }

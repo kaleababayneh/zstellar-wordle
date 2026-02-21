@@ -214,55 +214,43 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       let freshG = loadGame();
       if (freshG) setGame({ ...freshG });
 
-      // Also check on-chain turn: if turn >= 2, a ZK proof is required
+      // Determine if a ZK proof is required: the contract requires one for turn >= 2.
+      // Always fetch the opponent's guess directly from on-chain — local state may be
+      // stale or may have been incorrectly marked as "verified" by a prior failed attempt.
       const onChainTurn = chainTurn;
-      const localHasUnverified = (freshG ?? game).opponentGuesses.length > 0 &&
-        (freshG ?? game).opponentGuesses.some((g: GuessEntry) => !g.verified);
-
-      // If on-chain says turn >= 2 but we have no unverified opponent guess locally,
-      // sync opponent's last guess from on-chain before proceeding
-      if (onChainTurn >= 2 && !localHasUnverified) {
-        addStatus("Syncing opponent's guess from on-chain…");
-        const chain = await queryGameState(game.gameId);
-        if (chain.lastGuess && chain.lastGuess.length === 5) {
-          const { calculateWordleResults: calcResults } = await import("../gameLogic");
-          const results = calcResults(chain.lastGuess, (freshG ?? game).word);
-          addOpponentGuess({ word: chain.lastGuess, results, verified: false });
-          freshG = loadGame();
-          if (freshG) setGame({ ...freshG });
-        }
-      }
-
-      const latestGame = freshG ?? game;
-      const needsZkProof = onChainTurn >= 2 &&
-        latestGame.opponentGuesses.length > 0 &&
-        latestGame.opponentGuesses.some((g: GuessEntry) => !g.verified);
       let publicInputsBytes: Uint8Array = new Uint8Array(0);
       let proofBytes: Uint8Array = new Uint8Array(0);
+      let verifiedGuessWord: string | null = null;
+      let verifiedResults: number[] = [];
 
-      if (needsZkProof) {
-        const unverifiedGuesses = latestGame.opponentGuesses.filter((g: GuessEntry) => !g.verified);
-        const lastUnverified = unverifiedGuesses[unverifiedGuesses.length - 1];
-        if (!lastUnverified) throw new Error("No unverified opponent guess found");
+      if (onChainTurn >= 2) {
+        addStatus("Fetching opponent's last guess from on-chain…");
+        const chain = await queryGameState(game.gameId);
 
-        addStatus(`Verifying opponent's guess "${lastUnverified.word}"…`);
-        const results = calculateWordleResults(lastUnverified.word, latestGame.word);
+        if (!chain.lastGuess || chain.lastGuess.length !== 5) {
+          throw new Error("Could not fetch opponent's guess from on-chain");
+        }
+
+        const opponentGuessWord = chain.lastGuess;
+        const latestGame = freshG ?? game;
+
+        // Ensure the guess is in local state for display
+        const expectedOpp = Math.floor(onChainTurn / 2);
+        addOpponentGuess({ word: opponentGuessWord, results: [], verified: false }, expectedOpp);
+        freshG = loadGame();
+        if (freshG) setGame({ ...freshG });
+
+        addStatus(`Verifying opponent's guess "${opponentGuessWord}"…`);
+        const results = calculateWordleResults(opponentGuessWord, latestGame.word);
         addStatus(`Results: ${results.map((r) => (r === 2 ? "🟩" : r === 1 ? "🟨" : "⬛")).join("")}`);
 
         const { generateProof } = await import("../generateProof");
-        const proofArtifacts = await generateProof(lastUnverified.word, getGameSecret(latestGame), addStatus);
+        const proofArtifacts = await generateProof(opponentGuessWord, getGameSecret(latestGame), addStatus);
         publicInputsBytes = new Uint8Array(proofArtifacts.publicInputsBytes);
         proofBytes = new Uint8Array(proofArtifacts.proof);
 
-        let idx = -1;
-        for (let i = latestGame.opponentGuesses.length - 1; i >= 0; i--) {
-          if (!latestGame.opponentGuesses[i].verified) { idx = i; break; }
-        }
-        if (idx >= 0) {
-          latestGame.opponentGuesses[idx].verified = true;
-          latestGame.opponentGuesses[idx].results = results;
-          saveGame(latestGame);
-        }
+        verifiedGuessWord = opponentGuessWord;
+        verifiedResults = results;
       }
 
       const myGuess: GuessEntry = { word: currentGuess, results: [], verified: false };
@@ -278,6 +266,22 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
         guessWordBytes, pathElementsBytes, pathIndices,
         publicInputsBytes, proofBytes, addStatus,
       );
+
+      // Only mark opponent guess as verified AFTER successful on-chain submission
+      if (verifiedGuessWord) {
+        const postSubmit = loadGame();
+        if (postSubmit) {
+          for (let i = postSubmit.opponentGuesses.length - 1; i >= 0; i--) {
+            if (!postSubmit.opponentGuesses[i].verified &&
+                postSubmit.opponentGuesses[i].word === verifiedGuessWord) {
+              postSubmit.opponentGuesses[i].verified = true;
+              postSubmit.opponentGuesses[i].results = verifiedResults;
+              saveGame(postSubmit);
+              break;
+            }
+          }
+        }
+      }
 
       const updated = loadGame();
       if (updated) setGame({ ...updated });

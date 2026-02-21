@@ -95,11 +95,15 @@ export function useGamePolling(gs: UseGameReturn) {
 
       // New opponent guess appeared
       const expectedOppGuesses = Math.floor(chain.turn / 2);
-      if (chain.lastGuess && chain.phase === PHASE.ACTIVE && myTurn && g.opponentGuesses.length < expectedOppGuesses) {
-        const results = calculateWordleResults(chain.lastGuess, g.word);
-        addOpponentGuess({ word: chain.lastGuess, results, verified: false });
-        const updated = loadGame();
-        if (updated) setGame({ ...updated });
+      if (chain.lastGuess && chain.phase === PHASE.ACTIVE && myTurn) {
+        // Re-read from localStorage to get the latest count (avoid race with concurrent polls)
+        const freshG = loadGame();
+        if (freshG && freshG.opponentGuesses.length < expectedOppGuesses) {
+          const results = calculateWordleResults(chain.lastGuess, freshG.word);
+          addOpponentGuess({ word: chain.lastGuess, results, verified: false }, expectedOppGuesses);
+          const updated = loadGame();
+          if (updated) setGame({ ...updated });
+        }
       }
 
       // REVEAL phase: apply winning results
