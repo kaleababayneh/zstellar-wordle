@@ -1,34 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OpenGame, GameSummary } from "../soroban";
-import { fetchOpenGames, fetchGameSummaries, queryGameState, getGameCreator } from "../soroban";
-import { getMyGameEntries, removeMyGameEntry, isWordInList } from "../gameState";
+import type { OpenGame } from "../soroban";
+import { fetchOpenGames, queryGameState, getGameCreator } from "../soroban";
+import { isWordInList } from "../gameState";
 import { PHASE, WORD_LENGTH, STROOPS_PER_XLM } from "../config";
 
-type Tab = "open" | "my" | "create" | "join";
+type Tab = "open" | "create" | "join";
 
 interface LobbyProps {
   currentAddress: string;
   onJoinGame: (gameId: string, customWord?: string) => void;
   onCreateGame: (escrowXlm: number, customWord?: string) => void;
-  onResumeGame: (gameId: string) => void;
 }
-
-const phaseLabel = (phase: number): { text: string; color: string } => {
-  switch (phase) {
-    case PHASE.WAITING:
-      return { text: "Waiting for P2", color: "bg-accent/20 text-accent border-accent/40" };
-    case PHASE.ACTIVE:
-      return { text: "In Progress", color: "bg-primary/20 text-primary border-primary/40" };
-    case PHASE.REVEAL:
-      return { text: "Reveal Phase", color: "bg-ring/20 text-ring border-ring/40" };
-    case PHASE.FINALIZED:
-      return { text: "Finished", color: "bg-muted text-muted-foreground border-border" };
-    case PHASE.DRAW:
-      return { text: "Draw", color: "bg-accent/20 text-accent border-accent/40" };
-    default:
-      return { text: "Expired", color: "bg-muted text-muted-foreground border-border" };
-  }
-};
 
 const formatAddr = (addr: string) =>
   addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "—";
@@ -48,10 +30,9 @@ const timeAgo = (dateStr: string): string => {
   }
 };
 
-export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }: LobbyProps) {
+export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) {
   const [tab, setTab] = useState<Tab>("open");
   const [openGames, setOpenGames] = useState<OpenGame[]>([]);
-  const [myGameSummaries, setMyGameSummaries] = useState<GameSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -122,15 +103,6 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
       // Filter out my own games
       const filtered = open.filter((g) => g.creator !== currentAddress);
       setOpenGames(filtered);
-
-      // Fetch my games from localStorage + check their on-chain state
-      const myEntries = getMyGameEntries();
-      if (myEntries.length > 0) {
-        const summaries = await fetchGameSummaries(myEntries.map((e) => e.gameId));
-        setMyGameSummaries(summaries);
-      } else {
-        setMyGameSummaries([]);
-      }
     } catch (err: any) {
       setError(err.message ?? "Failed to load lobby");
     } finally {
@@ -167,19 +139,12 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
         : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
     }`;
 
-  // Active (non-finished) my games
-  const activeMyGames = myGameSummaries.filter((g) => g.phase < PHASE.FINALIZED || g.phase === PHASE.DRAW);
-  const finishedMyGames = myGameSummaries.filter((g) => g.phase === PHASE.FINALIZED);
-
   return (
     <div className="w-full max-w-lg">
       {/* Tab bar */}
       <div className="flex items-center justify-center gap-1 border-b border-border mb-6">
         <button className={tabClass("open")} onClick={() => setTab("open")}>
           Games {openGames.length > 0 && <span className="ml-1 text-xs font-mono text-primary">{openGames.length}</span>}
-        </button>
-        <button className={tabClass("my")} onClick={() => setTab("my")}>
-          Mine {activeMyGames.length > 0 && <span className="ml-1 text-xs font-mono text-primary">{activeMyGames.length}</span>}
         </button>
         <button className={tabClass("create")} onClick={() => setTab("create")}>
           Create
@@ -272,99 +237,6 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                 </div>
               ))}
             </div>
-          </>
-        )}
-
-        {/* ── My Games Tab ────────────────────────────────────────── */}
-        {tab === "my" && (
-          <>
-            {myGameSummaries.length === 0 && !loading && (
-              <div className="flex flex-col items-center gap-3 py-12">
-                <p className="text-muted-foreground text-sm">No games yet.</p>
-                <button
-                  onClick={() => setTab("create")}
-                  className="text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 py-2.5 rounded-md transition-colors"
-                >
-                  Create your first game
-                </button>
-              </div>
-            )}
-
-            {/* Active games */}
-            {activeMyGames.length > 0 && (
-              <div className="mb-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Active</h3>
-                <div className="space-y-2">
-                  {activeMyGames.map((game) => {
-                    const pl = phaseLabel(game.phase);
-                    const entry = getMyGameEntries().find((e) => e.gameId === game.gameId);
-                    return (
-                      <div
-                        key={game.gameId}
-                        className="flex items-center justify-between rounded-md px-4 py-3 border border-border hover:border-muted-foreground/30 transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className={`text-xs px-2 py-0.5 rounded-md border ${pl.color}`}>
-                              {pl.text}
-                            </span>
-                            {entry && (
-                              <span className="text-xs text-muted-foreground">
-                                {entry.role === "p1" ? "P1" : "P2"}
-                              </span>
-                            )}
-                            {game.escrowXlm > 0 && (
-                              <span className="text-accent text-xs font-medium">{game.escrowXlm} XLM</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1.5 ml-3 shrink-0">
-                          {game.phase === PHASE.WAITING && (
-                            <button
-                              onClick={() => copyLink(game.gameId)}
-                              className="text-muted-foreground hover:text-foreground p-1.5 rounded-md transition-colors"
-                              title="Copy invite link"
-                            >
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                            </button>
-                          )}
-                          <button
-                            onClick={() => onResumeGame(game.gameId)}
-                            className="text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-4 py-1.5 rounded-md transition-colors"
-                          >
-                            {game.phase === PHASE.WAITING ? "View" : "Play"}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Finished games */}
-            {finishedMyGames.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Finished</h3>
-                <div className="space-y-1.5">
-                  {finishedMyGames.map((game) => (
-                    <div
-                      key={game.gameId}
-                      className="flex items-center justify-between rounded-md px-4 py-2 border border-border/50 text-muted-foreground"
-                    >
-                      <span className="font-mono text-[10px] truncate flex-1">{game.gameId}</span>
-                      <button
-                        onClick={() => removeMyGameEntry(game.gameId)}
-                        className="text-muted-foreground hover:text-destructive p-1 transition-colors"
-                        title="Remove"
-                      >
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </>
         )}
 

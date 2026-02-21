@@ -11,7 +11,7 @@ export function Header({ wallet, addStatus, proverReady }: HeaderProps) {
   return (
     <header className="w-full border-b border-border">
       <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
-        <h1 className="text-xl font-bold tracking-tight text-foreground font-sans">Wordle Duel</h1>
+        <h1 className="text-xl font-bold tracking-tight text-foreground font-sans">ZK Wordle Duel</h1>
         <div className="flex items-center gap-2">
           {wallet.address ? (
             <>

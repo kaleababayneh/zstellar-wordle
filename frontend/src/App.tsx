@@ -8,7 +8,6 @@ import { ActiveGame } from "./components/ActiveGame";
 import { DrawPhase } from "./components/DrawPhase";
 import { GameOverPanel } from "./components/GameOverPanel";
 import { PHASE } from "./config";
-import { loadGame } from "./gameState";
 import { useFreighter } from "./hooks/useFreighter";
 import { useGame } from "./hooks/useGame";
 import { useProver } from "./hooks/useProver";
@@ -23,9 +22,9 @@ function App() {
   const actions = useGameActions({ gs, wallet, proverReady, pollGameState });
 
   const {
-    game, setGame,
+    game,
     currentGuess,
-    status, setStatus,
+    status,
     busy,
     gameOver, gameWon,
     withdrawing,
@@ -62,10 +61,6 @@ function App() {
             currentAddress={wallet.address}
             onJoinGame={(gameId, customWord) => actions.handleJoinGame(gameId, customWord)}
             onCreateGame={(escrow, word) => actions.handleCreateGame(escrow, word)}
-            onResumeGame={() => {
-              const saved = loadGame();
-              if (saved) { setGame(saved); setStatus([]); }
-            }}
           />
         </div>
       )}
