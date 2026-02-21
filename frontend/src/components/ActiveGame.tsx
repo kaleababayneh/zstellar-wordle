@@ -88,7 +88,7 @@ export function ActiveGame({
       </div>
 
       {/* Waiting for opponent */}
-      {!isMyTurn && onChainPhase === PHASE.ACTIVE && (oppTimeLeft === null || oppTimeLeft > 0) && (
+      {!isMyTurn && !busy && onChainPhase === PHASE.ACTIVE && (oppTimeLeft === null || oppTimeLeft > 0) && (
         <div className="mb-2 mx-auto px-5 py-2 bg-foreground text-background rounded-md text-sm font-bold flex items-center justify-center gap-2 w-fit">
           <span className="inline-flex gap-0.5">
             <span className="animate-bounce [animation-delay:0ms]">·</span>
