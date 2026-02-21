@@ -288,7 +288,7 @@ export async function createGameOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcPublicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcProofBytes))
     ),
-    "100000000", // 10 XLM max fee (ZK proof verification)
+    "10000000", // 1 XLM max fee
     log,
     true
   );
@@ -327,7 +327,7 @@ export async function joinGameOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcPublicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcProofBytes))
     ),
-    "100000000", // 10 XLM max fee (ZK proof verification)
+    "10000000", // 1 XLM max fee
     log,
     true
   );
@@ -388,7 +388,7 @@ export async function submitTurnOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
-    needsCpuCap ? "1000000000" : "10000000", // 10 XLM max fee if ZK proof, otherwise 1 XLM
+    "10000000", // 1 XLM max fee
     log,
     needsCpuCap
   );
@@ -427,7 +427,7 @@ export async function revealWordOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
-    "100000000", // 10 XLM max fee (ZK proof verification)
+    "10000000", // 1 XLM max fee
     log,
     true
   );
@@ -467,7 +467,7 @@ export async function revealWordDrawOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
-    "100000000", // 10 XLM max fee (ZK proof verification)
+    "10000000", // 1 XLM max fee
     log,
     true
   );
@@ -499,7 +499,7 @@ export async function claimTimeoutOnChain(
       new StellarSdk.Address(gameId).toScVal(),
       new StellarSdk.Address(publicKey).toScVal()
     ),
-    "100000000", // 10 XLM max fee
+    "10000000", // 1 XLM max fee
     log
   );
 
@@ -530,7 +530,7 @@ export async function withdrawEscrow(
       new StellarSdk.Address(gameId).toScVal(),
       new StellarSdk.Address(publicKey).toScVal()
     ),
-    "100000000", // 10 XLM max fee
+    "10000000", // 1 XLM max fee
     log
   );
 
