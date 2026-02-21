@@ -20,7 +20,7 @@ cd /Users/kaleab/Documents/zstellar-wordle && stellar contract deploy \
   -- \
   --vk_bytes "$(python3 -c "
 import sys
-data = open('circuit/target/vk', 'rb').read()
+data = open('circuit-word-guess/target/vk', 'rb').read()
 sys.stdout.write(data.hex())
 ")" \
   --wc_vk_bytes "$(python3 -c "

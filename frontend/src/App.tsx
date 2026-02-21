@@ -106,11 +106,9 @@ function App() {
           myDrawRevealed={myDrawRevealed}
           oppDrawRevealed={oppDrawRevealed}
           oppRevealedWord={oppRevealedWord}
-          drawDeadline={drawDeadline}
           withdrawing={withdrawing}
           onRevealWordDraw={actions.handleRevealWordDraw}
           onWithdraw={actions.handleWithdraw}
-          onClaimTimeout={actions.handleClaimTimeout}
           onNewGame={resetGame}
         />
       )}

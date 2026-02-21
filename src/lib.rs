@@ -64,7 +64,6 @@ pub enum Error {
     WrongPlayer = 12,
     WrongPhase = 13,
     NotYourTurn = 14,
-    EscrowMismatch = 15,
     AlreadyWithdrawn = 16,
     NotWinner = 17,
     InvalidReveal = 18,
@@ -461,26 +460,15 @@ impl TwoPlayerWordleContract {
             .get(&guess_key)
             .ok_or(Error::NoActiveGame)?;
 
-        // Extract commitment from public_inputs (first 32 bytes)
-        let mut commitment_from_proof = [0u8; 32];
-        for i in 0..32usize {
-            commitment_from_proof[i] = public_inputs.get(i as u32).unwrap_or(0);
-        }
-
         // Verify commitment matches
-        let commitment_from_proof_bytes = BytesN::from_array(&env, &commitment_from_proof);
-        if my_commitment != commitment_from_proof_bytes {
+        let commitment_from_pi = Self::extract_commitment_from_pi(&env, &public_inputs);
+        if my_commitment != commitment_from_pi {
             return Err(Error::GuessWordMismatch);
         }
 
         // Verify guess letters match what's in public_inputs
-        for i in 0u32..5 {
-            let field_offset = 32 + i * 32;
-            let letter_byte = public_inputs.get(field_offset + 31).unwrap_or(0);
-            let guess_byte = opponent_guess.get(i).unwrap();
-            if letter_byte != guess_byte {
-                return Err(Error::GuessWordMismatch);
-            }
+        if !Self::pi_letters_match(&public_inputs, &opponent_guess) {
+            return Err(Error::GuessWordMismatch);
         }
 
         // Verify ZK proof
@@ -511,9 +499,6 @@ impl TwoPlayerWordleContract {
             env.storage().temporary().set(&win_key, opponent);
             env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
 
-            // Set reveal deadline
-            let reveal_deadline = env.ledger().timestamp() + TURN_DURATION_SECS;
-            env.storage().temporary().set(&dead_key, &reveal_deadline);
             return Ok(());
         }
 
@@ -522,10 +507,6 @@ impl TwoPlayerWordleContract {
             // All turns exhausted, no winner → draw
             // Both players must reveal their words before withdrawing
             env.storage().temporary().set(&phase_key, &PHASE_DRAW);
-
-            // Set a deadline for both players to reveal their words
-            let draw_deadline = env.ledger().timestamp() + TURN_DURATION_SECS;
-            env.storage().temporary().set(&dead_key, &draw_deadline);
 
             // Reset revealed flags
             let p1_rev_key = Self::key_p1_revealed(&game_id);
@@ -595,17 +576,6 @@ impl TwoPlayerWordleContract {
             return Err(Error::WrongPhase);
         }
 
-        // Check reveal deadline
-        let dead_key = Self::key_game_deadline(&game_id);
-        let deadline: u64 = env
-            .storage()
-            .temporary()
-            .get(&dead_key)
-            .ok_or(Error::NoActiveGame)?;
-        if env.ledger().timestamp() > deadline {
-            return Err(Error::GameExpired);
-        }
-
         // Caller must be the winner
         let win_key = Self::key_game_winner(&game_id);
         let winner: Address = env
@@ -639,42 +609,19 @@ impl TwoPlayerWordleContract {
                 .ok_or(Error::NoActiveGame)?
         };
 
-        // Extract commitment from public_inputs and verify it matches stored
-        let mut commitment_from_proof = [0u8; 32];
-        for i in 0..32usize {
-            commitment_from_proof[i] = public_inputs.get(i as u32).unwrap_or(0);
-        }
-        let commitment_from_proof_bytes = BytesN::from_array(&env, &commitment_from_proof);
-        if winner_commitment != commitment_from_proof_bytes {
-            return Err(Error::InvalidReveal);
-        }
+        // Verify reveal: commitment + letters + results + ZK proof
+        Self::do_verify_reveal(&env, &winner_commitment, &reveal_word, &public_inputs, &proof_bytes)?;
 
-        // Verify the revealed word letters match public_inputs
-        if reveal_word.len() != 5 {
-            return Err(Error::InvalidGuessLength);
-        }
-        for i in 0u32..5 {
-            let field_offset = 32 + i * 32;
-            let letter_byte = public_inputs.get(field_offset + 31).unwrap_or(0);
-            let word_byte = reveal_word.get(i).unwrap();
-            if letter_byte != word_byte {
-                return Err(Error::InvalidReveal);
-            }
-        }
+        // Store revealed word so opponent can see it
+        let word_key = if caller == player1 {
+            Self::key_p1_word(&game_id)
+        } else {
+            Self::key_p2_word(&game_id)
+        };
+        env.storage().temporary().set(&word_key, &reveal_word);
+        env.storage().temporary().extend_ttl(&word_key, 5000, 5000);
 
-        // All results must be 2 (player guessed their own word correctly)
-        for i in 0u32..5 {
-            let offset = 192 + i * 32 + 31;
-            if public_inputs.get(offset).unwrap_or(0) != 2 {
-                return Err(Error::InvalidReveal);
-            }
-        }
-
-        // Verify ZK proof
-        Self::do_verify_proof(&env, &public_inputs, &proof_bytes)?;
-
-        // Word validity already proven at creation time via word-commit proof.
-        // Just finalize the game.
+        // Finalize the game.
         env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
 
         Ok(())
@@ -749,41 +696,9 @@ impl TwoPlayerWordleContract {
                 .ok_or(Error::NoActiveGame)?
         };
 
-        // Extract commitment from public_inputs and verify it matches stored
-        let mut commitment_from_proof = [0u8; 32];
-        for i in 0..32usize {
-            commitment_from_proof[i] = public_inputs.get(i as u32).unwrap_or(0);
-        }
-        let commitment_from_proof_bytes = BytesN::from_array(&env, &commitment_from_proof);
-        if my_commitment != commitment_from_proof_bytes {
-            return Err(Error::InvalidReveal);
-        }
+        // Verify reveal: commitment + letters + results + ZK proof
+        Self::do_verify_reveal(&env, &my_commitment, &reveal_word, &public_inputs, &proof_bytes)?;
 
-        // Verify the revealed word letters match public_inputs
-        if reveal_word.len() != 5 {
-            return Err(Error::InvalidGuessLength);
-        }
-        for i in 0u32..5 {
-            let field_offset = 32 + i * 32;
-            let letter_byte = public_inputs.get(field_offset + 31).unwrap_or(0);
-            let word_byte = reveal_word.get(i).unwrap();
-            if letter_byte != word_byte {
-                return Err(Error::InvalidReveal);
-            }
-        }
-
-        // All results must be 2 (player guessed their own word correctly)
-        for i in 0u32..5 {
-            let offset = 192 + i * 32 + 31;
-            if public_inputs.get(offset).unwrap_or(0) != 2 {
-                return Err(Error::InvalidReveal);
-            }
-        }
-
-        // Verify ZK proof
-        Self::do_verify_proof(&env, &public_inputs, &proof_bytes)?;
-
-        // Word validity already proven at creation time via word-commit proof.
         // Mark as revealed and store the word.
         env.storage().temporary().set(&rev_key, &true);
         env.storage().temporary().extend_ttl(&rev_key, 5000, 5000);
@@ -814,8 +729,8 @@ impl TwoPlayerWordleContract {
             .get(&phase_key)
             .ok_or(Error::NoActiveGame)?;
 
-        // Must be in active, reveal, or draw phase
-        if phase != PHASE_ACTIVE && phase != PHASE_REVEAL && phase != PHASE_DRAW {
+        // Timeout only applies during active play
+        if phase != PHASE_ACTIVE {
             return Err(Error::WrongPhase);
         }
 
@@ -844,56 +759,18 @@ impl TwoPlayerWordleContract {
             .get(&p2_key)
             .ok_or(Error::NoActiveGame)?;
 
-        if phase == PHASE_ACTIVE {
-            // In active phase, the person whose turn it is timed out
-            let turn_key = Self::key_game_turn(&game_id);
-            let turn: u32 = env
-                .storage()
-                .temporary()
-                .get(&turn_key)
-                .ok_or(Error::NoActiveGame)?;
-            let timed_out_player = if turn % 2 == 1 { &player1 } else { &player2 };
+        // The person whose turn it is timed out
+        let turn_key = Self::key_game_turn(&game_id);
+        let turn: u32 = env
+            .storage()
+            .temporary()
+            .get(&turn_key)
+            .ok_or(Error::NoActiveGame)?;
+        let timed_out_player = if turn % 2 == 1 { &player1 } else { &player2 };
 
-            // Caller must be the opponent of the timed-out player
-            if &caller == timed_out_player {
-                return Err(Error::WrongPlayer);
-            }
-        } else if phase == PHASE_REVEAL {
-            // In reveal phase, the winner timed out on their reveal
-            let win_key = Self::key_game_winner(&game_id);
-            let current_winner: Address = env
-                .storage()
-                .temporary()
-                .get(&win_key)
-                .ok_or(Error::NoActiveGame)?;
-
-            // Caller must be the non-winner (the one claiming timeout)
-            if caller == current_winner {
-                return Err(Error::WrongPlayer);
-            }
-        } else {
-            // In draw phase: caller must have revealed, opponent must NOT have revealed
-            let is_p1 = caller == player1;
-            let caller_rev_key = if is_p1 {
-                Self::key_p1_revealed(&game_id)
-            } else {
-                Self::key_p2_revealed(&game_id)
-            };
-            let opp_rev_key = if is_p1 {
-                Self::key_p2_revealed(&game_id)
-            } else {
-                Self::key_p1_revealed(&game_id)
-            };
-            let caller_revealed: bool = env.storage().temporary().get(&caller_rev_key).unwrap_or(false);
-            let opp_revealed: bool = env.storage().temporary().get(&opp_rev_key).unwrap_or(false);
-
-            // Caller must have revealed their word, opponent must not have
-            if !caller_revealed {
-                return Err(Error::WrongPlayer);
-            }
-            if opp_revealed {
-                return Err(Error::WrongPhase); // opponent already revealed, no timeout to claim
-            }
+        // Caller must be the opponent of the timed-out player
+        if &caller == timed_out_player {
+            return Err(Error::WrongPlayer);
         }
 
         // Caller wins by timeout
@@ -1102,6 +979,60 @@ impl TwoPlayerWordleContract {
 
     // ── Private helpers ──────────────────────────────────────────────────
 
+    /// Extract the 32-byte commitment from public inputs (bytes 0..31).
+    fn extract_commitment_from_pi(env: &Env, public_inputs: &Bytes) -> BytesN<32> {
+        let mut buf = [0u8; 32];
+        for i in 0..32usize {
+            buf[i] = public_inputs.get(i as u32).unwrap_or(0);
+        }
+        BytesN::from_array(env, &buf)
+    }
+
+    /// Check that the 5 letter fields in public_inputs match the given word.
+    /// Letters sit at offsets `32 + i*32 + 31` for i in 0..5.
+    fn pi_letters_match(public_inputs: &Bytes, word: &Bytes) -> bool {
+        for i in 0u32..5 {
+            let field_offset = 32 + i * 32;
+            if public_inputs.get(field_offset + 31).unwrap_or(0) != word.get(i).unwrap() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Common reveal verification: commitment + letters + all-correct results + ZK proof.
+    fn do_verify_reveal(
+        env: &Env,
+        commitment: &BytesN<32>,
+        reveal_word: &Bytes,
+        public_inputs: &Bytes,
+        proof_bytes: &Bytes,
+    ) -> Result<(), Error> {
+        let commitment_from_pi = Self::extract_commitment_from_pi(env, public_inputs);
+        if *commitment != commitment_from_pi {
+            return Err(Error::InvalidReveal);
+        }
+
+        if reveal_word.len() != 5 {
+            return Err(Error::InvalidGuessLength);
+        }
+
+        if !Self::pi_letters_match(public_inputs, reveal_word) {
+            return Err(Error::InvalidReveal);
+        }
+
+        // All results must be 2 (player guessed their own word correctly)
+        for i in 0u32..5 {
+            let offset = 192 + i * 32 + 31;
+            if public_inputs.get(offset).unwrap_or(0) != 2 {
+                return Err(Error::InvalidReveal);
+            }
+        }
+
+        Self::do_verify_proof(env, public_inputs, proof_bytes)?;
+        Ok(())
+    }
+
     /// Verify a word-commit ZK proof.
     /// The circuit proves: (1) commitment = Poseidon2(salt, l1..l5),
     ///                      (2) the word is in the Poseidon2 Merkle tree.
@@ -1116,13 +1047,9 @@ impl TwoPlayerWordleContract {
             return Err(Error::ProofParseError);
         }
 
-        // Extract commitment from public inputs (first 32 bytes) and verify it matches
-        let mut commitment_from_proof = [0u8; 32];
-        for i in 0..32usize {
-            commitment_from_proof[i] = public_inputs.get(i as u32).unwrap_or(0);
-        }
-        let commitment_from_proof_bytes = BytesN::from_array(env, &commitment_from_proof);
-        if *commitment != commitment_from_proof_bytes {
+        // Extract commitment from public inputs and verify it matches
+        let commitment_from_pi = Self::extract_commitment_from_pi(env, public_inputs);
+        if *commitment != commitment_from_pi {
             return Err(Error::GuessWordMismatch);
         }
 

@@ -1,6 +1,5 @@
 import type { GameState } from "../gameState";
 import { Spinner } from "./Spinner.tsx";
-import { formatTime } from "../utils.ts";
 
 interface DrawPhaseProps {
   game: GameState;
@@ -8,19 +7,17 @@ interface DrawPhaseProps {
   myDrawRevealed: boolean;
   oppDrawRevealed: boolean;
   oppRevealedWord: string;
-  drawDeadline: number | null;
   withdrawing: boolean;
   onRevealWordDraw: () => void;
   onWithdraw: () => void;
-  onClaimTimeout: () => void;
   onNewGame: () => void;
 }
 
 export function DrawPhase({
   game, busy,
   myDrawRevealed, oppDrawRevealed, oppRevealedWord,
-  drawDeadline, withdrawing,
-  onRevealWordDraw, onWithdraw, onClaimTimeout, onNewGame,
+  withdrawing,
+  onRevealWordDraw, onWithdraw, onNewGame,
 }: DrawPhaseProps) {
   return (
     <div className="mt-4 flex flex-col items-center gap-3 max-w-md">
@@ -32,11 +29,6 @@ export function DrawPhase({
         <p className="text-gray-400 text-sm mt-1">
           Your word: <span className="font-mono font-bold text-white">{game.word.toUpperCase()}</span>
         </p>
-        {drawDeadline !== null && (
-          <p className="text-gray-500 text-xs mt-2 font-mono">
-            Reveal deadline: {formatTime(drawDeadline)}
-          </p>
-        )}
       </div>
 
       {/* My reveal */}
@@ -77,17 +69,6 @@ export function DrawPhase({
       )}
       {game.escrowWithdrawn && (
         <p className="text-green-400 text-sm">Escrow withdrawn ✓</p>
-      )}
-
-      {/* Claim timeout */}
-      {myDrawRevealed && !oppDrawRevealed && drawDeadline !== null && drawDeadline <= 0 && (
-        <button
-          onClick={onClaimTimeout}
-          disabled={busy}
-          className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded text-sm w-full"
-        >
-          Opponent didn't reveal — Claim Full Pot
-        </button>
       )}
 
       {busy && (

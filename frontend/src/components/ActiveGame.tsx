@@ -99,16 +99,6 @@ export function ActiveGame({
           ) : (
             <>
               <p className="text-yellow-300 font-medium">Opponent must reveal their word…</p>
-              <p className="text-gray-400 text-xs mt-1">If they don't reveal in time, you can claim timeout.</p>
-              {oppTimeLeft !== null && oppTimeLeft <= 0 && (
-                <button
-                  onClick={onClaimTimeout}
-                  disabled={busy}
-                  className="mt-2 bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded text-sm"
-                >
-                  Claim Timeout
-                </button>
-              )}
             </>
           )}
         </div>
