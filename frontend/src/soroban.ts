@@ -399,15 +399,14 @@ export async function submitTurnOnChain(
 // ── Reveal Word ────────────────────────────────────────────────────────
 
 /**
- * Winner reveals their word: ZK proof (guessing own word) + Merkle proof.
+ * Winner reveals their word: ZK proof (guessing own word).
+ * Dictionary membership already proven at creation time.
  */
 export async function revealWordOnChain(
   gameId: string,
   publicKey: string,
   signTx: SignTransaction,
   revealWordBytes: Uint8Array,
-  pathElementsBytes: Uint8Array[],
-  pathIndices: number[],
   publicInputsBytes: Uint8Array,
   proofBytes: Uint8Array,
   onStatus?: (msg: string) => void
@@ -417,18 +416,6 @@ export async function revealWordOnChain(
 
   const contract = new StellarSdk.Contract(CONTRACT_ID);
 
-  const pathElementsScVal = StellarSdk.xdr.ScVal.scvVec(
-    pathElementsBytes.map((el) =>
-      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(el))
-    )
-  );
-
-  const pathIndicesScVal = StellarSdk.xdr.ScVal.scvVec(
-    pathIndices.map((idx) =>
-      StellarSdk.nativeToScVal(idx, { type: "u32" })
-    )
-  );
-
   await buildSignSubmit(
     publicKey,
     signTx,
@@ -437,8 +424,6 @@ export async function revealWordOnChain(
       new StellarSdk.Address(gameId).toScVal(),
       new StellarSdk.Address(publicKey).toScVal(),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(revealWordBytes)),
-      pathElementsScVal,
-      pathIndicesScVal,
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
@@ -453,7 +438,8 @@ export async function revealWordOnChain(
 // ── Reveal Word (Draw) ─────────────────────────────────────────────────
 
 /**
- * In a draw, each player reveals their word: ZK proof (guessing own word) + Merkle proof.
+ * In a draw, each player reveals their word: ZK proof (guessing own word).
+ * Dictionary membership already proven at creation time.
  * Must reveal before being allowed to withdraw.
  */
 export async function revealWordDrawOnChain(
@@ -461,8 +447,6 @@ export async function revealWordDrawOnChain(
   publicKey: string,
   signTx: SignTransaction,
   revealWordBytes: Uint8Array,
-  pathElementsBytes: Uint8Array[],
-  pathIndices: number[],
   publicInputsBytes: Uint8Array,
   proofBytes: Uint8Array,
   onStatus?: (msg: string) => void
@@ -472,18 +456,6 @@ export async function revealWordDrawOnChain(
 
   const contract = new StellarSdk.Contract(CONTRACT_ID);
 
-  const pathElementsScVal = StellarSdk.xdr.ScVal.scvVec(
-    pathElementsBytes.map((el) =>
-      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(el))
-    )
-  );
-
-  const pathIndicesScVal = StellarSdk.xdr.ScVal.scvVec(
-    pathIndices.map((idx) =>
-      StellarSdk.nativeToScVal(idx, { type: "u32" })
-    )
-  );
-
   await buildSignSubmit(
     publicKey,
     signTx,
@@ -492,8 +464,6 @@ export async function revealWordDrawOnChain(
       new StellarSdk.Address(gameId).toScVal(),
       new StellarSdk.Address(publicKey).toScVal(),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(revealWordBytes)),
-      pathElementsScVal,
-      pathIndicesScVal,
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),

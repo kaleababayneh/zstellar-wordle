@@ -728,13 +728,6 @@ function App() {
         addStatus
       );
 
-      // Generate Merkle proof for my word
-      const { getMerkleProof, proofToBytes } = await import("./merkleProof");
-      const merkleProof = await getMerkleProof(game.word);
-      if (!merkleProof) throw new Error("Could not generate Merkle proof for your word!");
-
-      const { pathElementsBytes, pathIndices } = proofToBytes(merkleProof);
-
       // Derive word bytes directly from game.word for guaranteed correctness
       const guessWordBytes = new Uint8Array(game.word.toLowerCase().split('').map(ch => ch.charCodeAt(0)));
 
@@ -743,8 +736,6 @@ function App() {
         wallet.address,
         wallet.sign,
         guessWordBytes,
-        pathElementsBytes,
-        pathIndices,
         proofArtifacts.publicInputsBytes,
         proofArtifacts.proof,
         addStatus
@@ -778,13 +769,6 @@ function App() {
         addStatus
       );
 
-      // Generate Merkle proof for my word
-      const { getMerkleProof, proofToBytes } = await import("./merkleProof");
-      const merkleProof = await getMerkleProof(game.word);
-      if (!merkleProof) throw new Error("Could not generate Merkle proof for your word!");
-
-      const { pathElementsBytes, pathIndices } = proofToBytes(merkleProof);
-
       // Derive word bytes directly from game.word for guaranteed correctness
       const guessWordBytes = new Uint8Array(game.word.toLowerCase().split('').map(ch => ch.charCodeAt(0)));
 
@@ -793,8 +777,6 @@ function App() {
         wallet.address,
         wallet.sign,
         guessWordBytes,
-        pathElementsBytes,
-        pathIndices,
         proofArtifacts.publicInputsBytes,
         proofArtifacts.proof,
         addStatus

@@ -571,15 +571,14 @@ impl TwoPlayerWordleContract {
         Ok(())
     }
 
-    /// Winner reveals their word: proves it matches commitment via ZK proof + proves it's in dictionary via Merkle.
+    /// Winner reveals their word: proves it matches commitment via ZK proof.
     /// The ZK proof is the winner "guessing their own word" — all results must be 2.
+    /// Dictionary membership was already verified at game creation via word-commit proof.
     pub fn reveal_word(
         env: Env,
         game_id: Address,
         caller: Address,
         reveal_word: Bytes,
-        path_elements: Vec<BytesN<32>>,
-        path_indices: Vec<u32>,
         public_inputs: Bytes,
         proof_bytes: Bytes,
     ) -> Result<(), Error> {
@@ -674,43 +673,20 @@ impl TwoPlayerWordleContract {
         // Verify ZK proof
         Self::do_verify_proof(&env, &public_inputs, &proof_bytes)?;
 
-        // Verify Merkle proof: is the word in the dictionary?
-        let merkle_result =
-            Self::do_verify_guess(&env, &reveal_word, &path_elements, &path_indices);
-
-        if merkle_result.is_ok() {
-            // Word is valid — winner confirmed, finalize
-            env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
-        } else {
-            // Word NOT in dictionary — winner cheated!
-            // Swap winner to the other player
-            let p2_key = Self::key_game_p2(&game_id);
-            let player2: Address = env
-                .storage()
-                .temporary()
-                .get(&p2_key)
-                .ok_or(Error::NoActiveGame)?;
-            let new_winner = if caller == player1 {
-                player2
-            } else {
-                player1
-            };
-            env.storage().temporary().set(&win_key, &new_winner);
-            env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
-        }
+        // Word validity already proven at creation time via word-commit proof.
+        // Just finalize the game.
+        env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
 
         Ok(())
     }
 
-    /// In a draw, each player reveals their word to prove it's valid.
-    /// If the word is invalid (bad Merkle proof), the OTHER player gets the full pot.
+    /// In a draw, each player reveals their word to prove it matches their commitment.
+    /// Dictionary membership was already verified at game creation via word-commit proof.
     pub fn reveal_word_draw(
         env: Env,
         game_id: Address,
         caller: Address,
         reveal_word: Bytes,
-        path_elements: Vec<BytesN<32>>,
-        path_indices: Vec<u32>,
         public_inputs: Bytes,
         proof_bytes: Bytes,
     ) -> Result<(), Error> {
@@ -807,30 +783,18 @@ impl TwoPlayerWordleContract {
         // Verify ZK proof
         Self::do_verify_proof(&env, &public_inputs, &proof_bytes)?;
 
-        // Verify Merkle proof: is the word in the dictionary?
-        let merkle_result =
-            Self::do_verify_guess(&env, &reveal_word, &path_elements, &path_indices);
+        // Word validity already proven at creation time via word-commit proof.
+        // Mark as revealed and store the word.
+        env.storage().temporary().set(&rev_key, &true);
+        env.storage().temporary().extend_ttl(&rev_key, 5000, 5000);
 
-        if merkle_result.is_ok() {
-            // Word is valid — mark as revealed and store the word
-            env.storage().temporary().set(&rev_key, &true);
-            env.storage().temporary().extend_ttl(&rev_key, 5000, 5000);
-
-            let word_key = if is_p1 {
-                Self::key_p1_word(&game_id)
-            } else {
-                Self::key_p2_word(&game_id)
-            };
-            env.storage().temporary().set(&word_key, &reveal_word);
-            env.storage().temporary().extend_ttl(&word_key, 5000, 5000);
+        let word_key = if is_p1 {
+            Self::key_p1_word(&game_id)
         } else {
-            // Word NOT in dictionary — cheater! Other player gets everything.
-            let other_player = if is_p1 { player2 } else { player1 };
-            let win_key = Self::key_game_winner(&game_id);
-            env.storage().temporary().set(&win_key, &other_player);
-            env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
-            env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
-        }
+            Self::key_p2_word(&game_id)
+        };
+        env.storage().temporary().set(&word_key, &reveal_word);
+        env.storage().temporary().extend_ttl(&word_key, 5000, 5000);
 
         Ok(())
     }
