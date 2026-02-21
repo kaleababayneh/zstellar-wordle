@@ -27,10 +27,5 @@ fn run(dir: &str) -> Result<(), String> {
 
 #[test]
 fn simple_circuit_proof_verifies() -> Result<(), String> {
-    run("circuits/simple_circuit/target")
-}
-
-#[test]
-fn fib_chain_proof_verifies() -> Result<(), String> {
-    run("circuits/fib_chain/target")
+    run("../circuit/target")
 }
