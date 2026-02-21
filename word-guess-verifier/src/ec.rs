@@ -1,6 +1,6 @@
 use crate::{field::Fr, types::G1Point};
 use soroban_sdk::{
-    crypto::bn254::{Bn254G1Affine, Bn254G2Affine, Fr as Bn254Fr},
+    crypto::bn254::{G1Affine, G2Affine, Fr as Bn254Fr},
     BytesN, Env, Vec,
 };
 
@@ -32,28 +32,28 @@ fn fr_to_bn254(env: &Env, fr: &Fr) -> Bn254Fr {
 }
 
 #[inline(always)]
-fn g1_from_point(env: &Env, pt: &G1Point) -> Bn254G1Affine {
-    Bn254G1Affine::from_array(env, &pt.to_bytes())
+fn g1_from_point(env: &Env, pt: &G1Point) -> G1Affine {
+    G1Affine::from_array(env, &pt.to_bytes())
 }
 
 #[inline(always)]
-pub fn rhs_g2_affine(env: &Env) -> Bn254G2Affine {
-    Bn254G2Affine::from_array(env, &RHS_G2_BYTES)
+pub fn rhs_g2_affine(env: &Env) -> G2Affine {
+    G2Affine::from_array(env, &RHS_G2_BYTES)
 }
 
 #[inline(always)]
-pub fn lhs_g2_affine(env: &Env) -> Bn254G2Affine {
-    Bn254G2Affine::from_array(env, &LHS_G2_BYTES)
+pub fn lhs_g2_affine(env: &Env) -> G2Affine {
+    G2Affine::from_array(env, &LHS_G2_BYTES)
 }
 
 /// Multi-scalar multiplication on G1: ∑ sᵢ·Cᵢ
 #[inline(always)]
-pub fn g1_msm(env: &Env, coms: &[G1Point], scalars: &[Fr]) -> Result<Bn254G1Affine, &'static str> {
+pub fn g1_msm(env: &Env, coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, &'static str> {
     if coms.len() != scalars.len() {
         return Err("msm len mismatch");
     }
     let bn = env.crypto().bn254();
-    let mut acc = Bn254G1Affine::from_array(env, &G1Point::infinity().to_bytes());
+    let mut acc = G1Affine::from_array(env, &G1Point::infinity().to_bytes());
     for (c, s) in coms.iter().zip(scalars.iter()) {
         if s.is_zero() {
             continue;
@@ -68,11 +68,11 @@ pub fn g1_msm(env: &Env, coms: &[G1Point], scalars: &[Fr]) -> Result<Bn254G1Affi
 
 /// Pairing product check e(P0, rhs_g2) * e(P1, lhs_g2) == 1
 #[inline(always)]
-pub fn pairing_check(env: &Env, p0: &Bn254G1Affine, p1: &Bn254G1Affine) -> bool {
-    let mut g1s: Vec<Bn254G1Affine> = Vec::new(env);
+pub fn pairing_check(env: &Env, p0: &G1Affine, p1: &G1Affine) -> bool {
+    let mut g1s: Vec<G1Affine> = Vec::new(env);
     g1s.push_back(p0.clone());
     g1s.push_back(p1.clone());
-    let mut g2s: Vec<Bn254G2Affine> = Vec::new(env);
+    let mut g2s: Vec<G2Affine> = Vec::new(env);
     g2s.push_back(rhs_g2_affine(env));
     g2s.push_back(lhs_g2_affine(env));
     env.crypto().bn254().pairing_check(g1s, g2s)
@@ -82,12 +82,36 @@ pub mod helpers {
     use super::*;
 
     #[inline(always)]
-    pub fn to_affine(env: &Env, pt: &G1Point) -> Bn254G1Affine {
+    pub fn to_affine(env: &Env, pt: &G1Point) -> G1Affine {
         g1_from_point(env, pt)
     }
 
+    /// Negate a G1 point by negating its Y coordinate: (X, Y) -> (X, q - Y)
     #[inline(always)]
-    pub fn negate(env: &Env, pt: &G1Point) -> Bn254G1Affine {
-        -g1_from_point(env, pt)
+    pub fn negate(env: &Env, pt: &G1Point) -> G1Affine {
+        let mut bytes = pt.to_bytes();
+
+        // BN254 base field modulus q
+        const Q: [u8; 32] = [
+            0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29,
+            0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
+            0x97, 0x81, 0x6a, 0x91, 0x68, 0x71, 0xca, 0x8d,
+            0x3c, 0x20, 0x8c, 0x16, 0xd8, 0x7c, 0xfd, 0x47,
+        ];
+
+        // Check if point is at infinity (all zeros)
+        let is_identity = bytes.iter().all(|&b| b == 0);
+        if !is_identity {
+            // Negate Y coordinate: Y' = q - Y (big-endian subtraction)
+            let mut borrow: u16 = 0;
+            for j in (0..32).rev() {
+                let i = 32 + j;
+                let wide = 256u16 + Q[j] as u16 - bytes[i] as u16 - borrow;
+                bytes[i] = wide as u8;
+                borrow = 1 - (wide >> 8);
+            }
+        }
+
+        G1Affine::from_array(env, &bytes)
     }
 }

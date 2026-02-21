@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, symbol_short, token, Address, Bytes,
-    BytesN, Env, Symbol, Vec,
+    BytesN, Env, Symbol, U256, Vec,
 };
 use ultrahonk_soroban_verifier::{UltraHonkVerifier, PROOF_BYTES};
 
@@ -11,12 +11,12 @@ const TURN_DURATION_SECS: u64 = 300;
 /// Maximum turns: 6 guesses per player = 12 turns + 1 final verification = 13
 const MAX_TURNS: u32 = 13;
 
-/// Keccak256 Merkle root of the 5-letter word dictionary (12 653 words, depth 14).
+/// Poseidon2 Merkle root of the 5-letter word dictionary (12 653 words, depth 14).
 const MERKLE_ROOT: [u8; 32] = [
-    0xca, 0x51, 0x82, 0xba, 0xc9, 0xd0, 0xec, 0x16,
-    0xa6, 0x6d, 0x0c, 0x25, 0x21, 0x48, 0x07, 0xa6,
-    0xe3, 0x62, 0x7b, 0xa8, 0x9e, 0x19, 0xd1, 0xc6,
-    0xae, 0x11, 0xce, 0xe1, 0x6e, 0xc4, 0x20, 0xc3,
+    0x0a, 0xe4, 0xb8, 0x21, 0xbc, 0xbf, 0xcc, 0x5f,
+    0x6a, 0x3b, 0x71, 0x1a, 0x48, 0xce, 0xb8, 0xa8,
+    0x6b, 0xaa, 0xd9, 0x69, 0xd6, 0x4f, 0xb9, 0x0c,
+    0xfd, 0x2e, 0x2b, 0x36, 0x70, 0xe3, 0x7d, 0xc7,
 ];
 
 /// Game phases
@@ -977,6 +977,16 @@ impl TwoPlayerWordleContract {
         env.storage().persistent().get(&key).unwrap_or(game_id)
     }
 
+    /// Standalone Merkle proof check (Poseidon2).
+    pub fn verify_guess(
+        env: Env,
+        guess_word: Bytes,
+        path_elements: Vec<BytesN<32>>,
+        path_indices: Vec<u32>,
+    ) -> Result<(), Error> {
+        Self::do_verify_guess(&env, &guess_word, &path_elements, &path_indices)
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────
 
     /// Extract the 32-byte commitment from public inputs (bytes 0..31).
@@ -1105,34 +1115,39 @@ impl TwoPlayerWordleContract {
             word_bytes[i] = b;
         }
 
-        let mut leaf = [0u8; 32];
-        for i in 0..5 {
-            leaf[27 + i] = word_bytes[i];
-        }
+        // Compute leaf as a field element: l1*256^4 + l2*256^3 + l3*256^2 + l4*256 + l5
+        // This matches the Noir circuit and JS Poseidon Merkle tree leaf encoding
+        let leaf_value: u128 = (word_bytes[0] as u128) * 256u128.pow(4)
+            + (word_bytes[1] as u128) * 256u128.pow(3)
+            + (word_bytes[2] as u128) * 256u128.pow(2)
+            + (word_bytes[3] as u128) * 256
+            + (word_bytes[4] as u128);
 
+        let mut current_hash = U256::from_u128(env, leaf_value);
+
+        let field = Symbol::new(env, "BN254");
         let depth = path_elements.len();
-        let mut current_hash = Bytes::from_array(env, &leaf);
 
         for i in 0..depth {
-            let sibling_arr: [u8; 32] = path_elements.get(i).unwrap().into();
-            let sibling = Bytes::from_array(env, &sibling_arr);
+            let sibling_bytes: Bytes = path_elements.get(i).unwrap().into();
+            let sibling = U256::from_be_bytes(env, &sibling_bytes);
             let idx = path_indices.get(i).unwrap();
 
-            let mut preimage = Bytes::new(env);
+            let mut inputs = Vec::new(env);
             if idx == 0 {
-                preimage.append(&current_hash);
-                preimage.append(&sibling);
+                inputs.push_back(current_hash);
+                inputs.push_back(sibling);
             } else {
-                preimage.append(&sibling);
-                preimage.append(&current_hash);
+                inputs.push_back(sibling);
+                inputs.push_back(current_hash);
             }
 
-            let hash_result = env.crypto().keccak256(&preimage);
-            current_hash = Bytes::from_array(env, &hash_result.to_array());
+            current_hash = env.crypto().poseidon2_hash(&inputs, field.clone());
         }
 
-        let stored_root_bytes = Bytes::from_array(env, &MERKLE_ROOT);
-        if current_hash != stored_root_bytes {
+        let stored_root_bytes: Bytes = BytesN::from_array(env, &MERKLE_ROOT).into();
+        let stored_root = U256::from_be_bytes(env, &stored_root_bytes);
+        if current_hash != stored_root {
             return Err(Error::InvalidMerkleProof);
         }
 
