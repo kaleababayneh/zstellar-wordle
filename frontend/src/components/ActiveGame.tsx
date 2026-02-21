@@ -47,7 +47,7 @@ export function ActiveGame({
   }));
 
   return (
-    <div className="flex flex-col items-center w-full max-w-2xl relative">
+    <div className="flex flex-col items-center w-full max-w-2xl relative mt-1">
       {/* Toast (wordle-style) */}
       {toastMessage && (
         <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
@@ -58,13 +58,13 @@ export function ActiveGame({
       )}
 
       {/* Game info bar */}
-      <div className="w-full flex items-center justify-between text-xs text-muted-foreground font-mono px-1 mb-3">
+      <div className="w-full flex items-center justify-between text-xs text-muted-foreground font-mono px-1 mb-1">
         <span>{game.myRole === "p1" ? "Player 1" : "Player 2"} · Turn {chainTurn}</span>
         {game.escrowAmount > 0 && <span>Pot: {game.escrowAmount * 2} XLM</span>}
       </div>
 
       {/* Timers */}
-      <div className="flex gap-2 mb-4 w-full">
+      <div className="flex gap-2 mb-3 w-full">
         <div
           className={`flex-1 px-3 py-2 rounded-md font-mono text-sm text-center border transition-colors ${
             isMyTurn
@@ -88,21 +88,19 @@ export function ActiveGame({
       </div>
 
       {/* Waiting for opponent */}
-      {!isMyTurn && onChainPhase === PHASE.ACTIVE && (
-        <div className="mb-4 w-full px-5 py-3.5 bg-[#ECE7D1] border border-zinc-700 rounded-xl text-center">
-          <div className="flex items-center justify-center gap-2 text-zinc-800 font-semibold text-[15px] tracking-wide">
-            <span className="inline-flex gap-0.75">
-              <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
-              <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
-              <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
-            </span>
-            Opponent is thinking
-            <span className="inline-flex gap-0.75">
-              <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
-              <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
-              <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
-            </span>
-          </div>
+      {!isMyTurn && onChainPhase === PHASE.ACTIVE && (oppTimeLeft === null || oppTimeLeft > 0) && (
+        <div className="mb-2 mx-auto px-5 py-2 bg-foreground text-background rounded-md text-sm font-bold flex items-center justify-center gap-2 w-fit">
+          <span className="inline-flex gap-0.5">
+            <span className="animate-bounce [animation-delay:0ms]">·</span>
+            <span className="animate-bounce [animation-delay:150ms]">·</span>
+            <span className="animate-bounce [animation-delay:300ms]">·</span>
+          </span>
+          Opponent is thinking
+          <span className="inline-flex gap-0.5">
+            <span className="animate-bounce [animation-delay:0ms]">·</span>
+            <span className="animate-bounce [animation-delay:150ms]">·</span>
+            <span className="animate-bounce [animation-delay:300ms]">·</span>
+          </span>
         </div>
       )}
 
@@ -163,6 +161,22 @@ export function ActiveGame({
         </div>
       )}
 
+      {/* Timed-out loser — offer New Game */}
+      {onChainPhase === PHASE.ACTIVE && isMyTurn && myTimeLeft !== null && myTimeLeft <= 0 && (
+        <div className="mb-4 w-full px-5 py-4 bg-card border border-border rounded-xl text-center">
+          <p className="text-destructive font-bold text-lg mb-1">Time's Up!</p>
+          <p className="text-muted-foreground text-sm mb-3">
+            Your opponent can claim this game. Start a new one?
+          </p>
+          <button
+            onClick={onNewGame}
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 py-2.5 rounded-md transition-colors"
+          >
+            New Game
+          </button>
+        </div>
+      )}
+
       {/* Final verify-only turn */}
       {onChainPhase === PHASE.ACTIVE && isMyTurn && game.myGuesses.length >= MAX_GUESSES && (
         <div className="mb-4 w-full">
@@ -178,7 +192,7 @@ export function ActiveGame({
       )}
 
       {/* Grids — always side-by-side */}
-      <div className="flex gap-6 mb-6 justify-center items-start">
+      <div className="flex gap-6 mb-3 justify-center items-start">
         <div className="flex flex-col items-center min-w-0">
           <p className="text-muted-foreground text-xs mb-2 font-semibold uppercase tracking-wider">Your Board</p>
           <WordleGrid
@@ -205,15 +219,21 @@ export function ActiveGame({
         </div>
       </div>
 
-      {/* Keyboard */}
+      {/* Keyboard + Busy spinner */}
       {onChainPhase === PHASE.ACTIVE && (
         <div className="w-full pb-2">
+          {busy && (
+            <div className="mb-2 mx-auto px-3 py-2 bg-foreground text-background rounded-md text-sm font-bold flex items-center justify-center gap-2 w-fit">
+              <Spinner size={4} />
+              Processing…
+            </div>
+          )}
           <Keyboard onKey={onKey} letterStates={letterStates} />
         </div>
       )}
 
-      {/* Busy spinner */}
-      {busy && (
+      {/* Busy spinner outside keyboard phase */}
+      {busy && onChainPhase !== PHASE.ACTIVE && (
         <div className="mt-3 px-4 py-2 bg-foreground text-background rounded-md text-sm font-bold flex items-center gap-2">
           <Spinner size={4} />
           Processing…
