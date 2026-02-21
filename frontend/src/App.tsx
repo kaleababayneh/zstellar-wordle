@@ -35,7 +35,7 @@ function App() {
     onChainPhase, chainTurn,
     winner, chainPolled,
     myDrawRevealed, oppDrawRevealed,
-    oppRevealedWord, drawDeadline,
+    oppRevealedWord,
     addStatus, resetGame,
   } = gs;
 
