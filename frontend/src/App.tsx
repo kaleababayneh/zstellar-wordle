@@ -553,6 +553,7 @@ function App() {
 
       // Update React state immediately so the grid shows the guess
       // before the on-chain tx completes (avoids blink/glitch)
+      const savedGuessWord = currentGuess;
       const freshState = loadGame();
       if (freshState) setGame({ ...freshState });
       setCurrentGuess("");
@@ -581,6 +582,17 @@ function App() {
       await pollGameState();
     } catch (err: any) {
       addStatus(`Error: ${err.message ?? err}`);
+      // Rollback: remove the optimistically-added guess so the user can retry
+      const rollback = loadGame();
+      if (rollback && rollback.myGuesses.length > 0) {
+        const lastGuess = rollback.myGuesses[rollback.myGuesses.length - 1];
+        if (!lastGuess.verified && lastGuess.results.length === 0) {
+          rollback.myGuesses.pop();
+          saveGame(rollback);
+          setGame({ ...rollback });
+          setCurrentGuess(lastGuess.word);
+        }
+      }
     } finally {
       setBusy(false);
     }

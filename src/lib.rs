@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, token, Address, Bytes, BytesN, Env,
-    Symbol, Vec,
+    contract, contracterror, contractevent, contractimpl, symbol_short, token, Address, Bytes,
+    BytesN, Env, Symbol, Vec,
 };
 use ultrahonk_soroban_verifier::{UltraHonkVerifier, PROOF_BYTES};
 
@@ -25,6 +25,22 @@ const PHASE_ACTIVE: u32 = 1;   // Game in progress
 const PHASE_REVEAL: u32 = 2;   // Winner must reveal their word
 const PHASE_FINALIZED: u32 = 3; // Winner confirmed, ready for withdrawal
 const PHASE_DRAW: u32 = 4;      // Max turns reached, no winner
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GameCreated {
+    #[topic]
+    pub game_id: Address,
+    pub player1: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GameJoined {
+    #[topic]
+    pub game_id: Address,
+    pub player2: Address,
+}
 
 /// Contract
 #[contract]
@@ -218,8 +234,11 @@ impl TwoPlayerWordleContract {
         env.storage().persistent().extend_ttl(&count_key, 20000, 20000);
 
         // Emit event so the lobby can discover open games
-        env.events()
-            .publish((symbol_short!("created"),), (game_id.clone(), player1.clone()));
+        GameCreated {
+            game_id: game_id.clone(),
+            player1: player1.clone(),
+        }
+        .publish(&env);
 
         Ok(())
     }
@@ -290,8 +309,11 @@ impl TwoPlayerWordleContract {
         env.storage().temporary().extend_ttl(&dead_key, 5000, 5000);
 
         // Emit event so lobby can remove this game
-        env.events()
-            .publish((symbol_short!("joined"),), (game_id.clone(), player2.clone()));
+        GameJoined {
+            game_id: game_id.clone(),
+            player2: player2.clone(),
+        }
+        .publish(&env);
 
         Ok(())
     }
