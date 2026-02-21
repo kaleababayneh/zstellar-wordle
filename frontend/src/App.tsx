@@ -96,6 +96,7 @@ function App() {
           onRevealWord={actions.handleRevealWord}
           onClaimTimeout={actions.handleClaimTimeout}
           onVerifyOnly={actions.handleVerifyOnly}
+          onNewGame={resetGame}
         />
       )}
 

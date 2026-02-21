@@ -23,6 +23,7 @@ interface ActiveGameProps {
   onRevealWord: () => void;
   onClaimTimeout: () => void;
   onVerifyOnly: () => void;
+  onNewGame: () => void;
 }
 
 export function ActiveGame({
@@ -31,7 +32,7 @@ export function ActiveGame({
   onChainPhase, chainTurn, winner,
   letterStates, toastMessage, shakeRow, onClearShake,
   onKey,
-  onRevealWord, onClaimTimeout, onVerifyOnly,
+  onRevealWord, onClaimTimeout, onVerifyOnly, onNewGame,
 }: ActiveGameProps) {
   const myGridGuesses = game.myGuesses.map((g) => ({
     word: g.word,
@@ -88,8 +89,20 @@ export function ActiveGame({
 
       {/* Waiting for opponent */}
       {!isMyTurn && onChainPhase === PHASE.ACTIVE && (
-        <div className="mb-4 w-full px-4 py-2.5 bg-foreground text-background rounded-md text-sm font-bold text-center">
-          Waiting for opponent's move…
+        <div className="mb-4 w-full px-5 py-3.5 bg-[#ECE7D1] border border-zinc-700 rounded-xl text-center">
+          <div className="flex items-center justify-center gap-2 text-zinc-800 font-semibold text-[15px] tracking-wide">
+            <span className="inline-flex gap-0.75">
+              <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
+            </span>
+            Opponent is thinking
+            <span className="inline-flex gap-0.75">
+              <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
+            </span>
+          </div>
         </div>
       )}
 
@@ -108,7 +121,31 @@ export function ActiveGame({
               </button>
             </>
           ) : (
-            <p className="text-present font-bold">Opponent must reveal their word…</p>
+            <>
+              <p className="text-destructive font-bold text-lg mb-1">You Lost</p>
+              <p className="text-muted-foreground text-sm mb-3">
+                Wait a moment to see your opponent's word, or start a new game.
+              </p>
+              <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm mb-3">
+                <span className="inline-flex gap-0.75">
+                  <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
+                  <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
+                  <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
+                </span>
+                Opponent is revealing
+                <span className="inline-flex gap-0.75">
+                  <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
+                  <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
+                  <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
+                </span>
+              </div>
+              <button
+                onClick={onNewGame}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 py-2.5 rounded-md transition-colors"
+              >
+                New Game
+              </button>
+            </>
           )}
         </div>
       )}

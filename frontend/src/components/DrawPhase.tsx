@@ -78,10 +78,15 @@ export function DrawPhase({
 
       <button
         onClick={onNewGame}
-        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-md transition-colors"
       >
-        ← New Game
+        New Game
       </button>
+      {!myDrawRevealed && (
+        <p className="text-muted-foreground text-xs text-center">
+          You can start a new game anytime — reveal first to withdraw your escrow.
+        </p>
+      )}
     </div>
   );
 }
