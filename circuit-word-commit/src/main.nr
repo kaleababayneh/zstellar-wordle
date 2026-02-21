@@ -1,14 +1,12 @@
 use poseidon::poseidon2::Poseidon2;
 
 fn main(
-    // -- Public inputs --
-    // Poseidon2 commitment to the word: hash(salt, l1, l2, l3, l4, l5)
+    // hash of all letters with salt
     commitment_hash: pub Field,
     // Poseidon2 Merkle root of the word list
     merkle_root: pub Field,
-
-    // -- Private inputs --
-    // Merkle proof (14 levels for ~12,653 words, 2^14 = 16,384 capacity)
+    //  Private inputs 
+    // Merkle proof for the committed word
     merkle_path: [Field; 14],
     merkle_indices: [u8; 14],
     // Word letters 
@@ -27,8 +25,7 @@ fn main(
     assert(computed_commitment == commitment_hash);
 
     // 2. Compute the leaf: encode word as a single field element
-    //    leaf = l1*256^4 + l2*256^3 + l3*256^2 + l4*256 + l5
-    //    This matches the encoding used to build the Poseidon2 Merkle tree.
+    // leaf = l1*256^4 + l2*256^3 + l3*256^2 + l4*256 + l5
     let leaf = first_letter * 256 * 256 * 256 * 256
              + second_letter * 256 * 256 * 256
              + third_letter * 256 * 256
