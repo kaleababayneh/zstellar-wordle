@@ -46,7 +46,7 @@ export function ActiveGame({
   }));
 
   return (
-    <div className="flex flex-col items-center w-full max-w-lg relative">
+    <div className="flex flex-col items-center w-full max-w-2xl relative">
       {/* Toast (wordle-style) */}
       {toastMessage && (
         <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
@@ -140,9 +140,9 @@ export function ActiveGame({
         </div>
       )}
 
-      {/* Grids */}
-      <div className="flex gap-8 mb-6 flex-wrap justify-center">
-        <div className="flex flex-col items-center">
+      {/* Grids — always side-by-side */}
+      <div className="flex gap-6 mb-6 justify-center items-start">
+        <div className="flex flex-col items-center min-w-0">
           <p className="text-muted-foreground text-xs mb-2 font-semibold uppercase tracking-wider">Your Board</p>
           <WordleGrid
             guesses={myGridGuesses}
@@ -152,13 +152,19 @@ export function ActiveGame({
             onShakeEnd={onClearShake}
           />
         </div>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center min-w-0 relative">
           <p className="text-muted-foreground text-xs mb-2 font-semibold uppercase tracking-wider">Opponent</p>
-          <WordleGrid
-            guesses={opponentGridGuesses}
-            currentGuess=""
-            maxRows={MAX_GUESSES}
-          />
+          <div className="relative">
+            <div className="blur-[2px] pointer-events-none">
+              <WordleGrid
+                guesses={opponentGridGuesses}
+                currentGuess=""
+                maxRows={MAX_GUESSES}
+              />
+            </div>
+            {/* subtle frosted overlay */}
+            <div className="absolute inset-0 bg-background/10 rounded-md pointer-events-none" />
+          </div>
         </div>
       </div>
 
