@@ -122,7 +122,7 @@ async function queryContract(
   }
 
   const tx = new StellarSdk.TransactionBuilder(account, {
-    fee: "100",
+    fee: "10",
     networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(contract.call(funcName, ...args))
@@ -288,7 +288,7 @@ export async function createGameOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcPublicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcProofBytes))
     ),
-    "1000000000", // 100 XLM max fee (ZK proof verification)
+    "100000000", // 10 XLM max fee (ZK proof verification)
     log,
     true
   );
@@ -327,7 +327,7 @@ export async function joinGameOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcPublicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcProofBytes))
     ),
-    "1000000000", // 100 XLM max fee (ZK proof verification)
+    "100000000", // 10 XLM max fee (ZK proof verification)
     log,
     true
   );
@@ -388,7 +388,7 @@ export async function submitTurnOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
-    needsCpuCap ? "1000000000" : "10000000", // 100 XLM for ZK, 1 XLM otherwise
+    needsCpuCap ? "1000000000" : "10000000", // 10 XLM max fee if ZK proof, otherwise 1 XLM
     log,
     needsCpuCap
   );
@@ -427,7 +427,7 @@ export async function revealWordOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
-    "1000000000", // 100 XLM max fee (ZK proof)
+    "100000000", // 10 XLM max fee (ZK proof verification)
     log,
     true
   );
@@ -467,7 +467,7 @@ export async function revealWordDrawOnChain(
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
-    "1000000000", // 100 XLM max fee (ZK proof)
+    "100000000", // 10 XLM max fee (ZK proof verification)
     log,
     true
   );
@@ -499,7 +499,7 @@ export async function claimTimeoutOnChain(
       new StellarSdk.Address(gameId).toScVal(),
       new StellarSdk.Address(publicKey).toScVal()
     ),
-    "10000000",
+    "100000000", // 10 XLM max fee
     log
   );
 
@@ -530,7 +530,7 @@ export async function withdrawEscrow(
       new StellarSdk.Address(gameId).toScVal(),
       new StellarSdk.Address(publicKey).toScVal()
     ),
-    "10000000",
+    "100000000", // 10 XLM max fee
     log
   );
 
