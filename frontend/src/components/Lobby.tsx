@@ -74,6 +74,45 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
   const [joinLooking, setJoinLooking] = useState(false);
   const [joinLookupError, setJoinLookupError] = useState("");
 
+  // Validate that a string looks like a valid Stellar public key (G... 56 chars, base32)
+  const isValidStellarId = (id: string): boolean => {
+    return /^G[A-Z2-7]{55}$/.test(id);
+  };
+
+  // Extracted lookup logic so it can be called from button or auto-trigger
+  const doLookup = useCallback(async (gameId: string) => {
+    if (!gameId || !isValidStellarId(gameId)) return;
+    setJoinLooking(true);
+    setJoinLookupError("");
+    setJoinPreview(null);
+    try {
+      const [chain, creator] = await Promise.all([
+        queryGameState(gameId),
+        getGameCreator(gameId),
+      ]);
+      if (chain.phase !== PHASE.WAITING) {
+        setJoinLookupError("This game is not accepting new players.");
+      } else {
+        setJoinPreview({
+          escrowXlm: chain.escrowAmount / STROOPS_PER_XLM,
+          creator: creator || "Unknown",
+          phase: chain.phase,
+        });
+      }
+    } catch (err: any) {
+      setJoinLookupError(err.message ?? "Failed to look up game");
+    } finally {
+      setJoinLooking(false);
+    }
+  }, []);
+
+  // Auto-lookup when a valid Game ID is pasted/set
+  useEffect(() => {
+    if (joinGameId && isValidStellarId(joinGameId) && !joinPreview && !joinLooking) {
+      doLookup(joinGameId);
+    }
+  }, [joinGameId, joinPreview, joinLooking, doLookup]);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -433,32 +472,8 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame, onResumeGame }
                   className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono"
                 />
                 <button
-                  onClick={async () => {
-                    if (!joinGameId) return;
-                    setJoinLooking(true);
-                    setJoinLookupError("");
-                    setJoinPreview(null);
-                    try {
-                      const [chain, creator] = await Promise.all([
-                        queryGameState(joinGameId),
-                        getGameCreator(joinGameId),
-                      ]);
-                      if (chain.phase !== PHASE.WAITING) {
-                        setJoinLookupError("This game is not accepting new players.");
-                      } else {
-                        setJoinPreview({
-                          escrowXlm: chain.escrowAmount / STROOPS_PER_XLM,
-                          creator: creator || "Unknown",
-                          phase: chain.phase,
-                        });
-                      }
-                    } catch (err: any) {
-                      setJoinLookupError(err.message ?? "Failed to look up game");
-                    } finally {
-                      setJoinLooking(false);
-                    }
-                  }}
-                  disabled={!joinGameId || joinLooking}
+                  onClick={() => doLookup(joinGameId)}
+                  disabled={!joinGameId || !isValidStellarId(joinGameId) || joinLooking}
                   className="bg-gray-600 hover:bg-gray-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded"
                 >
                   {joinLooking ? "Looking up…" : "Look up"}
