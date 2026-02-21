@@ -77,6 +77,10 @@ impl TwoPlayerWordleContract {
         symbol_short!("vk")
     }
 
+    fn key_wc_vk() -> Symbol {
+        symbol_short!("wc_vk")
+    }
+
     fn key_game_phase(game_id: &Address) -> (Symbol, Address) {
         (symbol_short!("gm_phase"), game_id.clone())
     }
@@ -171,13 +175,18 @@ impl TwoPlayerWordleContract {
         (symbol_short!("gm_crea"), game_id.clone())
     }
 
-    /// Initialize the on-chain VK at deploy time.
-    pub fn __constructor(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
+    /// Initialize the on-chain VKs at deploy time.
+    /// `vk_bytes` – verification key for the guess-result circuit.
+    /// `wc_vk_bytes` – verification key for the word-commit circuit.
+    pub fn __constructor(env: Env, vk_bytes: Bytes, wc_vk_bytes: Bytes) -> Result<(), Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
+        env.storage().instance().set(&Self::key_wc_vk(), &wc_vk_bytes);
         Ok(())
     }
 
     /// Player 1 creates a new game with their commitment and escrow.
+    /// A word-commit ZK proof must be provided to prove the committed word
+    /// is in the dictionary.
     /// game_id is a unique identifier (e.g. a randomly generated address).
     pub fn create_game(
         env: Env,
@@ -186,8 +195,13 @@ impl TwoPlayerWordleContract {
         commitment1: BytesN<32>,
         token_addr: Address,
         amount: i128,
+        wc_public_inputs: Bytes,
+        wc_proof_bytes: Bytes,
     ) -> Result<(), Error> {
         player1.require_auth();
+
+        // Verify word-commit proof: proves the committed word is in the dictionary
+        Self::do_verify_word_commit(&env, &commitment1, &wc_public_inputs, &wc_proof_bytes)?;
 
         // Check if game already exists
         let phase_key = Self::key_game_phase(&game_id);
@@ -244,13 +258,20 @@ impl TwoPlayerWordleContract {
     }
 
     /// Player 2 joins an existing game with matching escrow.
+    /// A word-commit ZK proof must be provided to prove the committed word
+    /// is in the dictionary.
     pub fn join_game(
         env: Env,
         game_id: Address,
         player2: Address,
         commitment2: BytesN<32>,
+        wc_public_inputs: Bytes,
+        wc_proof_bytes: Bytes,
     ) -> Result<(), Error> {
         player2.require_auth();
+
+        // Verify word-commit proof: proves the committed word is in the dictionary
+        Self::do_verify_word_commit(&env, &commitment2, &wc_public_inputs, &wc_proof_bytes)?;
 
         // Check game exists and is waiting for player 2
         let phase_key = Self::key_game_phase(&game_id);
@@ -1116,6 +1137,44 @@ impl TwoPlayerWordleContract {
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
+
+    /// Verify a word-commit ZK proof.
+    /// The circuit proves: (1) commitment = Poseidon2(salt, l1..l5),
+    ///                      (2) the word is in the Poseidon2 Merkle tree.
+    /// Public inputs layout: [commitment_hash (32 bytes), merkle_root (32 bytes)]
+    fn do_verify_word_commit(
+        env: &Env,
+        commitment: &BytesN<32>,
+        public_inputs: &Bytes,
+        proof_bytes: &Bytes,
+    ) -> Result<(), Error> {
+        if proof_bytes.len() as usize != PROOF_BYTES {
+            return Err(Error::ProofParseError);
+        }
+
+        // Extract commitment from public inputs (first 32 bytes) and verify it matches
+        let mut commitment_from_proof = [0u8; 32];
+        for i in 0..32usize {
+            commitment_from_proof[i] = public_inputs.get(i as u32).unwrap_or(0);
+        }
+        let commitment_from_proof_bytes = BytesN::from_array(env, &commitment_from_proof);
+        if *commitment != commitment_from_proof_bytes {
+            return Err(Error::GuessWordMismatch);
+        }
+
+        let wc_vk_bytes: Bytes = env
+            .storage()
+            .instance()
+            .get(&Self::key_wc_vk())
+            .ok_or(Error::VkNotSet)?;
+        let verifier =
+            UltraHonkVerifier::new(env, &wc_vk_bytes).map_err(|_| Error::VkParseError)?;
+
+        verifier
+            .verify(proof_bytes, public_inputs)
+            .map_err(|_| Error::VerificationFailed)?;
+        Ok(())
+    }
 
     fn do_verify_proof(env: &Env, public_inputs: &Bytes, proof_bytes: &Bytes) -> Result<(), Error> {
         if proof_bytes.len() as usize != PROOF_BYTES {

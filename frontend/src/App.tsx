@@ -357,14 +357,38 @@ function App() {
         customWord
       );
 
-      // Register on-chain
+      // Register on-chain (with word-commit ZK proof)
       const commitBytes = commitmentToBytes(newGame.commitmentHash);
+
+      // Generate Poseidon Merkle proof for the chosen word
+      addStatus("Generating word-commit proof…");
+      const { getPoseidonMerkleProof } = await import("./poseidonMerkleProof");
+      const posMerkle = await getPoseidonMerkleProof(newGame.word);
+      if (!posMerkle) {
+        addStatus("Word not found in Poseidon Merkle tree.");
+        setCreatingGame(false);
+        return;
+      }
+
+      const { generateWordCommitProof } = await import("./generateWordCommitProof");
+      const wcProof = await generateWordCommitProof(
+        newGame.commitmentHash,
+        newGame.salt,
+        newGame.letterCodes,
+        posMerkle.pathElements,
+        posMerkle.pathIndices,
+        posMerkle.root,
+        addStatus
+      );
+
       await createGameOnChain(
         gameId,
         wallet.address,
         wallet.sign,
         commitBytes,
         escrowXlm,
+        wcProof.publicInputsBytes,
+        wcProof.proof,
         addStatus
       );
 
@@ -425,13 +449,37 @@ function App() {
         customWord
       );
 
-      // Join on-chain
+      // Join on-chain (with word-commit ZK proof)
       const commitBytes = commitmentToBytes(newGame.commitmentHash);
+
+      // Generate Poseidon Merkle proof for the chosen word
+      addStatus("Generating word-commit proof…");
+      const { getPoseidonMerkleProof } = await import("./poseidonMerkleProof");
+      const posMerkle = await getPoseidonMerkleProof(newGame.word);
+      if (!posMerkle) {
+        addStatus("Word not found in Poseidon Merkle tree.");
+        setCreatingGame(false);
+        return;
+      }
+
+      const { generateWordCommitProof } = await import("./generateWordCommitProof");
+      const wcProof = await generateWordCommitProof(
+        newGame.commitmentHash,
+        newGame.salt,
+        newGame.letterCodes,
+        posMerkle.pathElements,
+        posMerkle.pathIndices,
+        posMerkle.root,
+        addStatus
+      );
+
       await joinGameOnChain(
         gameId,
         wallet.address,
         wallet.sign,
         commitBytes,
+        wcProof.publicInputsBytes,
+        wcProof.proof,
         addStatus
       );
 

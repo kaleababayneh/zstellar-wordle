@@ -263,6 +263,8 @@ export async function createGameOnChain(
   signTx: SignTransaction,
   commitmentBytes: Uint8Array,
   escrowXlm: number,
+  wcPublicInputsBytes: Uint8Array,
+  wcProofBytes: Uint8Array,
   onStatus?: (msg: string) => void
 ): Promise<void> {
   const log = onStatus ?? console.log;
@@ -282,10 +284,13 @@ export async function createGameOnChain(
       new StellarSdk.Address(publicKey).toScVal(),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(commitmentBytes)),
       new StellarSdk.Address(NATIVE_TOKEN_ID).toScVal(),
-      StellarSdk.nativeToScVal(escrowStroops, { type: "i128" })
+      StellarSdk.nativeToScVal(escrowStroops, { type: "i128" }),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcPublicInputsBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcProofBytes))
     ),
-    "10000000", // 1 XLM max fee
-    log
+    "1000000000", // 100 XLM max fee (ZK proof verification)
+    log,
+    true
   );
 
   log("Game created on-chain ✅");
@@ -302,6 +307,8 @@ export async function joinGameOnChain(
   publicKey: string,
   signTx: SignTransaction,
   commitmentBytes: Uint8Array,
+  wcPublicInputsBytes: Uint8Array,
+  wcProofBytes: Uint8Array,
   onStatus?: (msg: string) => void
 ): Promise<void> {
   const log = onStatus ?? console.log;
@@ -317,9 +324,12 @@ export async function joinGameOnChain(
       new StellarSdk.Address(gameId).toScVal(),
       new StellarSdk.Address(publicKey).toScVal(),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(commitmentBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcPublicInputsBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(wcProofBytes))
     ),
-    "10000000",
-    log
+    "1000000000", // 100 XLM max fee (ZK proof verification)
+    log,
+    true
   );
 
   log("Joined game ✅");
