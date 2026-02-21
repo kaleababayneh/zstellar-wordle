@@ -1,5 +1,6 @@
 interface KeyboardProps {
   onKey: (key: string) => void;
+  onResign?: () => void;
   letterStates: Record<string, number | undefined>;
 }
 
@@ -9,7 +10,7 @@ const ROWS = [
   ["Enter", "z", "x", "c", "v", "b", "n", "m", "⌫"],
 ];
 
-export function Keyboard({ onKey, letterStates }: KeyboardProps) {
+export function Keyboard({ onKey, onResign, letterStates }: KeyboardProps) {
   const keyClass = (key: string): string => {
     const state = letterStates[key];
     const base =
@@ -40,6 +41,16 @@ export function Keyboard({ onKey, letterStates }: KeyboardProps) {
               ) : key}
             </button>
           ))}
+          {ri === 2 && onResign && (
+            <button
+              onClick={onResign}
+              className="flex flex-col items-center justify-center rounded-md min-w-[42px] sm:min-w-[48px] h-[52px] sm:h-[58px] text-[9px] sm:text-[10px] font-bold uppercase select-none transition-all duration-150 active:scale-95 bg-destructive/15 text-destructive hover:bg-destructive hover:text-white border border-destructive/30 leading-none gap-0.5"
+              aria-label="Resign game"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 -rotate-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+              <span>Resign</span>
+            </button>
+          )}
           {ri === 2 && <div className="w-0" />}
         </div>
       ))}

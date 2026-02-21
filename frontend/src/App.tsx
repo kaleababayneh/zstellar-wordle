@@ -60,6 +60,7 @@ function App() {
         <div className="mb-6 flex flex-col items-center w-full animate-fade-in-up">
           <Lobby
             currentAddress={wallet.address}
+            busy={gs.creatingGame}
             onJoinGame={(gameId, customWord) => actions.handleJoinGame(gameId, customWord)}
             onCreateGame={(escrow, word) => actions.handleCreateGame(escrow, word)}
           />
@@ -95,6 +96,7 @@ function App() {
           onKey={actions.handleKey}
           onRevealWord={actions.handleRevealWord}
           onClaimTimeout={actions.handleClaimTimeout}
+          onResign={actions.handleResign}
           onVerifyOnly={actions.handleVerifyOnly}
           onNewGame={resetGame}
         />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { OpenGame } from "../soroban";
 import { fetchOpenGames, queryGameState, getGameCreator } from "../soroban";
+import { Spinner } from "./Spinner";
 import { isWordInList } from "../gameState";
 import { PHASE, WORD_LENGTH, STROOPS_PER_XLM } from "../config";
 
@@ -8,6 +9,7 @@ type Tab = "open" | "create" | "join";
 
 interface LobbyProps {
   currentAddress: string;
+  busy?: boolean;
   onJoinGame: (gameId: string, customWord?: string) => void;
   onCreateGame: (escrowXlm: number, customWord?: string) => void;
 }
@@ -30,7 +32,7 @@ const timeAgo = (dateStr: string): string => {
   }
 };
 
-export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) {
+export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyProps) {
   const [tab, setTab] = useState<Tab>("open");
   const [openGames, setOpenGames] = useState<OpenGame[]>([]);
   const [loading, setLoading] = useState(true);
@@ -310,6 +312,7 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
               </div>
 
               <button
+                disabled={busy}
                 onClick={() => {
                   if (secretWord && secretWord.length !== WORD_LENGTH) {
                     showToast("Not enough letters");
@@ -326,7 +329,12 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
                 }}
                 className="w-full h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-md text-sm transition-colors"
               >
-                {secretWord ? `Create with "${secretWord.toUpperCase()}"` : "Create with Random Word"}
+                {busy ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Spinner size={4} />
+                    Processing…
+                  </span>
+                ) : secretWord ? `Create with "${secretWord.toUpperCase()}"` : "Create with Random Word"}
               </button>
             </div>
           </div>
@@ -432,10 +440,15 @@ export function Lobby({ currentAddress, onJoinGame, onCreateGame }: LobbyProps) 
                       }
                       onJoinGame(joinGameId, joinSecretWord || undefined);
                     }}
-                    disabled={!joinGameId}
+                    disabled={!joinGameId || busy}
                     className="w-full h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-md text-sm transition-colors"
                   >
-                    {joinPreview.escrowXlm > 0 ? `Join · Deposit ${joinPreview.escrowXlm} XLM` : "Join Game"}
+                    {busy ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Spinner size={4} />
+                        Processing…
+                      </span>
+                    ) : joinPreview.escrowXlm > 0 ? `Join · Deposit ${joinPreview.escrowXlm} XLM` : "Join Game"}
                   </button>
                 </>
               )}

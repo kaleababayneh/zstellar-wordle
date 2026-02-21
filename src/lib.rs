@@ -714,6 +714,57 @@ impl TwoPlayerWordleContract {
         Ok(())
     }
 
+    /// Resign: forfeit the game immediately. Opponent wins.
+    pub fn resign(
+        env: Env,
+        game_id: Address,
+        caller: Address,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        let phase_key = Self::key_game_phase(&game_id);
+        let phase: u32 = env
+            .storage()
+            .temporary()
+            .get(&phase_key)
+            .ok_or(Error::NoActiveGame)?;
+
+        if phase != PHASE_ACTIVE {
+            return Err(Error::WrongPhase);
+        }
+
+        // Get players
+        let p1_key = Self::key_game_p1(&game_id);
+        let player1: Address = env
+            .storage()
+            .temporary()
+            .get(&p1_key)
+            .ok_or(Error::NoActiveGame)?;
+        let p2_key = Self::key_game_p2(&game_id);
+        let player2: Address = env
+            .storage()
+            .temporary()
+            .get(&p2_key)
+            .ok_or(Error::NoActiveGame)?;
+
+        // Caller must be one of the players
+        let opponent = if caller == player1 {
+            player2
+        } else if caller == player2 {
+            player1
+        } else {
+            return Err(Error::WrongPlayer);
+        };
+
+        // Opponent wins by resignation
+        let win_key = Self::key_game_winner(&game_id);
+        env.storage().temporary().set(&win_key, &opponent);
+        env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
+        env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
+
+        Ok(())
+    }
+
     /// Claim timeout: if the opponent didn't play in time, you win.
     pub fn claim_timeout(
         env: Env,

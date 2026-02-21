@@ -475,6 +475,37 @@ export async function revealWordDrawOnChain(
   log("Word revealed for draw ✅");
 }
 
+// ── Resign ─────────────────────────────────────────────────────────────
+
+/**
+ * Resign the current game. The opponent wins immediately.
+ */
+export async function resignOnChain(
+  gameId: string,
+  publicKey: string,
+  signTx: SignTransaction,
+  onStatus?: (msg: string) => void
+): Promise<void> {
+  const log = onStatus ?? console.log;
+  log("Resigning…");
+
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+
+  await buildSignSubmit(
+    publicKey,
+    signTx,
+    contract.call(
+      "resign",
+      new StellarSdk.Address(gameId).toScVal(),
+      new StellarSdk.Address(publicKey).toScVal()
+    ),
+    "10000000", // 1 XLM max fee
+    log
+  );
+
+  log("Resigned ✅");
+}
+
 // ── Claim Timeout ──────────────────────────────────────────────────────
 
 /**

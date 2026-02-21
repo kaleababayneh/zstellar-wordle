@@ -22,6 +22,7 @@ interface ActiveGameProps {
   onKey: (key: string) => void;
   onRevealWord: () => void;
   onClaimTimeout: () => void;
+  onResign: () => void;
   onVerifyOnly: () => void;
   onNewGame: () => void;
 }
@@ -32,7 +33,7 @@ export function ActiveGame({
   onChainPhase, chainTurn, winner,
   letterStates, toastMessage, shakeRow, onClearShake,
   onKey,
-  onRevealWord, onClaimTimeout, onVerifyOnly, onNewGame,
+  onRevealWord, onClaimTimeout, onResign, onVerifyOnly, onNewGame,
 }: ActiveGameProps) {
   const myGridGuesses = game.myGuesses.map((g) => ({
     word: g.word,
@@ -228,7 +229,7 @@ export function ActiveGame({
               Processing…
             </div>
           )}
-          <Keyboard onKey={onKey} letterStates={letterStates} />
+          <Keyboard onKey={onKey} onResign={onResign} letterStates={letterStates} />
         </div>
       )}
 

@@ -22,6 +22,7 @@ import {
   revealWordOnChain,
   revealWordDrawOnChain,
   claimTimeoutOnChain,
+  resignOnChain,
   withdrawEscrow,
   queryGameState,
 } from "../soroban";
@@ -415,6 +416,21 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
     }
   }, [busy, game, wallet.address, wallet.sign, addStatus, pollGameState, setBusy, setStatus, setGame, setMyDrawRevealed]);
 
+  // ── Resign ──────────────────────────────────────────────────────────
+
+  const handleResign = useCallback(async () => {
+    if (busy || !game || !wallet.address) return;
+    setBusy(true);
+    try {
+      await resignOnChain(game.gameId, wallet.address, wallet.sign, addStatus);
+      await pollGameState();
+    } catch (err: any) {
+      addStatus(`Error: ${err.message ?? err}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, game, wallet.address, wallet.sign, addStatus, pollGameState, setBusy]);
+
   // ── Claim Timeout ───────────────────────────────────────────────────
 
   const handleClaimTimeout = useCallback(async () => {
@@ -473,6 +489,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
     handleVerifyOnly,
     handleRevealWord,
     handleRevealWordDraw,
+    handleResign,
     handleClaimTimeout,
     handleWithdraw,
     handleKey,
