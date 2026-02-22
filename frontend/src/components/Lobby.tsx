@@ -3,6 +3,7 @@ import type { OpenGame } from "../soroban";
 import { fetchOpenGames, queryGameState, getGameCreator } from "../soroban";
 import { Spinner } from "./Spinner";
 import { HowToPlay } from "./HowToPlay";
+import { LandingHero } from "./LandingHero";
 import { isWordInList, WORD_LIST } from "../gameState";
 import { PHASE, WORD_LENGTH, STROOPS_PER_XLM } from "../config";
 
@@ -159,6 +160,9 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
       {/* How to Play modal */}
       <HowToPlay open={showHelp} onClose={() => setShowHelp(false)} />
 
+      {/* Landing hero */}
+      <LandingHero />
+
       {/* Tab bar */}
       <div className="flex items-center justify-center gap-1 border-b border-border mb-6">
         <button
@@ -217,7 +221,7 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
                   onClick={() => setTab("create")}
                   className="text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 py-2.5 rounded-md transition-colors"
                 >
-                  Create a Game
+                  Start Playing
                 </button>
               </div>
             )}

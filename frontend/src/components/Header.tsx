@@ -1,5 +1,14 @@
+import { useMemo } from "react";
 import type { FreighterState } from "../hooks/useFreighter";
 import { CONTRACT_ID } from "../config";
+
+const COLORS = ["correct", "present", "absent"] as const;
+const TITLE_LETTERS = "ZKWORDLEDUEL".split("");
+const WORD_BREAKS = [2, 8]; // indices where gaps go (after ZK, after WORDLE)
+
+function randomColors() {
+  return TITLE_LETTERS.map(() => COLORS[Math.floor(Math.random() * COLORS.length)]);
+}
 
 interface HeaderProps {
   wallet: FreighterState;
@@ -8,10 +17,29 @@ interface HeaderProps {
 }
 
 export function Header({ wallet, addStatus, proverReady }: HeaderProps) {
+  const tileColors = useMemo(randomColors, []);
+
   return (
     <header className="w-full border-b border-border">
       <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
-        <h1 className="text-xl font-bold tracking-tight text-foreground font-sans">ZK Wordle Duel</h1>
+        <div className="flex items-center select-none">
+          {TITLE_LETTERS.map((letter, i) => (
+            <div
+              key={i}
+              className="w-6 h-6 flex items-center justify-center text-[12px] font-bold uppercase rounded-[3px] border animate-flip"
+              style={{
+                background: `var(--${tileColors[i]})`,
+                borderColor: `var(--${tileColors[i]})`,
+                color: tileColors[i] === "absent" ? "var(--foreground)" : "var(--background)",
+                animationDelay: `${i * 200}ms`,
+                animationFillMode: "backwards",
+                marginLeft: WORD_BREAKS.includes(i) ? "12px" : i > 0 ? "4px" : "0",
+              }}
+            >
+              {letter}
+            </div>
+          ))}
+        </div>
         <div className="flex items-center gap-2">
           {wallet.address ? (
             <>
