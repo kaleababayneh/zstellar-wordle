@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, symbol_short, token, Address, Bytes,
-    BytesN, Env, Symbol, U256, Vec,
+    BytesN, Env, IntoVal, String, Symbol, U256, Val, Vec,
 };
 use ultrahonk_soroban_verifier::{UltraHonkVerifier, PROOF_BYTES};
 
@@ -174,6 +174,50 @@ impl TwoPlayerWordleContract {
         (symbol_short!("gm_crea"), game_id.clone())
     }
 
+    fn key_session_id(game_id: &Address) -> (Symbol, Address) {
+        (symbol_short!("gm_sid"), game_id.clone())
+    }
+
+    // ── Game Hub integration ─────────────────────────────────────────────
+
+    fn game_hub_address(env: &Env) -> Address {
+        Address::from_string(&String::from_str(
+            env,
+            "CB4VZAT2U3UC6XFK3N23SKRF2NDCMP3QHJYMCHHFMZO7MRQO6DQ2EMYG",
+        ))
+    }
+
+    fn call_start_game(
+        env: &Env,
+        game_id: &Address,
+        player1: &Address,
+        player2: &Address,
+    ) {
+        let game_hub = Self::game_hub_address(env);
+        let sid_key = Self::key_session_id(game_id);
+        let session_id: u32 = env.storage().temporary().get(&sid_key).unwrap_or(0);
+
+        let mut args: Vec<Val> = Vec::new(env);
+        args.push_back(env.current_contract_address().into_val(env));
+        args.push_back(session_id.into_val(env));
+        args.push_back(player1.into_val(env));
+        args.push_back(player2.into_val(env));
+        args.push_back(0i128.into_val(env));
+        args.push_back(0i128.into_val(env));
+        env.invoke_contract::<()>(&game_hub, &Symbol::new(env, "start_game"), args);
+    }
+
+    fn call_end_game(env: &Env, game_id: &Address, player1_won: bool) {
+        let game_hub = Self::game_hub_address(env);
+        let sid_key = Self::key_session_id(game_id);
+        let session_id: u32 = env.storage().temporary().get(&sid_key).unwrap_or(0);
+
+        let mut args: Vec<Val> = Vec::new(env);
+        args.push_back(session_id.into_val(env));
+        args.push_back(player1_won.into_val(env));
+        env.invoke_contract::<()>(&game_hub, &Symbol::new(env, "end_game"), args);
+    }
+
     /// Initialize the on-chain VKs at deploy time.
     /// `vk_bytes` – verification key for the guess-result circuit.
     /// `wc_vk_bytes` – verification key for the word-commit circuit.
@@ -245,6 +289,11 @@ impl TwoPlayerWordleContract {
         env.storage().persistent().extend_ttl(&creator_key, 20000, 20000);
         env.storage().persistent().set(&count_key, &(count + 1));
         env.storage().persistent().extend_ttl(&count_key, 20000, 20000);
+
+        // Store session_id for game hub integration (count = index before increment)
+        let sid_key = Self::key_session_id(&game_id);
+        env.storage().temporary().set(&sid_key, &count);
+        env.storage().temporary().extend_ttl(&sid_key, 5000, 5000);
 
         // Emit event so the lobby can discover open games
         GameCreated {
@@ -327,6 +376,14 @@ impl TwoPlayerWordleContract {
         let dead_key = Self::key_game_deadline(&game_id);
         env.storage().temporary().set(&dead_key, &deadline);
         env.storage().temporary().extend_ttl(&dead_key, 5000, 5000);
+
+        // Notify game hub that game has started
+        let p1_for_hub: Address = env
+            .storage()
+            .temporary()
+            .get(&Self::key_game_p1(&game_id))
+            .ok_or(Error::NoActiveGame)?;
+        Self::call_start_game(&env, &game_id, &p1_for_hub, &player2);
 
         // Emit event so lobby can remove this game
         GameJoined {
@@ -516,6 +573,9 @@ impl TwoPlayerWordleContract {
             env.storage().temporary().set(&p2_rev_key, &false);
             env.storage().temporary().extend_ttl(&p2_rev_key, 5000, 5000);
 
+            // Notify game hub of draw (no winner)
+            Self::call_end_game(&env, &game_id, false);
+
             return Ok(());
         }
 
@@ -623,6 +683,10 @@ impl TwoPlayerWordleContract {
 
         // Finalize the game.
         env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
+
+        // Notify game hub that game ended
+        let player1_won = caller == player1;
+        Self::call_end_game(&env, &game_id, player1_won);
 
         Ok(())
     }
@@ -748,7 +812,8 @@ impl TwoPlayerWordleContract {
             .ok_or(Error::NoActiveGame)?;
 
         // Caller must be one of the players
-        let opponent = if caller == player1 {
+        let caller_is_p1 = caller == player1;
+        let opponent = if caller_is_p1 {
             player2
         } else if caller == player2 {
             player1
@@ -761,6 +826,9 @@ impl TwoPlayerWordleContract {
         env.storage().temporary().set(&win_key, &opponent);
         env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
         env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
+
+        // Notify game hub (if caller resigned, they didn't win)
+        Self::call_end_game(&env, &game_id, !caller_is_p1);
 
         Ok(())
     }
@@ -829,6 +897,10 @@ impl TwoPlayerWordleContract {
         env.storage().temporary().set(&win_key, &caller);
         env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
         env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
+
+        // Notify game hub (caller won, so player1_won iff caller is player1)
+        let player1_won = caller == player1;
+        Self::call_end_game(&env, &game_id, player1_won);
 
         Ok(())
     }

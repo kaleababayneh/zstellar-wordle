@@ -1,10 +1,10 @@
 // Game configuration & constants
 
 // The contract deployed on Stellar testnet
-export const CONTRACT_ID = "CB3HC5IGZ5D47YQWVRKPMKY7VPP3X7ZQ2KOVCJVO46KURMASKWPPFNE6";
+export const CONTRACT_ID = "CB2HOVCC3RRKK65KKQEPMYY62VJJM7DAG74X7E4QMRHWEJPUCKL7PNNE";
 
 // Stellar testnet RPC
-export const RPC_URL = "https://soroban-testnet.stellar.org";
+export const RPC_URL = "https://stellar.liquify.com/api=41EEWAH79Y5OCGI7/testnet";
 export const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 
 export const WORD_LENGTH = 5;
