@@ -46,6 +46,11 @@ export function useGamePolling(gs: UseGameReturn) {
     try {
       const chain = await queryGameState(g.gameId);
 
+      // After the async call, re-check localStorage — if the game was
+      // cleared (e.g. user clicked "New Game") while we were awaiting,
+      // discard the results so we don't resurrect the old game state.
+      if (!loadGame()) return;
+
       setOnChainPhase(chain.phase);
       setChainPolled(true);
       setChainTurn(chain.turn);

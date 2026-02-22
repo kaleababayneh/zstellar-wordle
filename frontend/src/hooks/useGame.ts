@@ -73,24 +73,32 @@ export function useGame() {
 
   /** Reset every piece of state back to "no game" defaults. */
   const resetGame = useCallback(() => {
+    // Stop any active polling/timers immediately
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     clearGame();
     setGame(null);
     setCurrentGuess("");
     setGameOver(false);
     setLetterStates({});
     setStatus([]);
+    setBusy(false);
+    setWithdrawing(false);
     setMyTimeLeft(null);
     setOppTimeLeft(null);
     setGameWon(false);
+    setIsMyTurn(false);
     setOnChainPhase(PHASE.NONE);
     setChainPolled(false);
     setChainTurn(0);
     setWinner("");
     setCopiedGameId(false);
+    setCreatingGame(false);
     setMyDrawRevealed(false);
     setOppDrawRevealed(false);
     setOppRevealedWord("");
     setDrawDeadline(null);
+    console.log("[resetGame] cleared all state, returning to lobby");
   }, []);
 
   // ── Load saved game on mount ─────────────────────────────────────────

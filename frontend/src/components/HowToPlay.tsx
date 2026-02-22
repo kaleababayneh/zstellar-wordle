@@ -71,7 +71,7 @@ export function HowToPlay({ open, onClose }: HowToPlayProps) {
             <Step
               num={4}
               title="Win the Pot"
-              desc="The first player to guess the word wins and collects the entire escrow pot. If neither guesses in 6 tries, the pot is split."
+              desc="The first player to guess the word wins and collects the entire escrow pot. If neither guesses in 6 tries, each player reveals their word and the pot is split."
             />
           </div>
 

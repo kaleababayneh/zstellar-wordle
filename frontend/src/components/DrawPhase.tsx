@@ -36,7 +36,7 @@ export function DrawPhase({
           disabled={busy}
           className="w-full h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold rounded-md transition-colors"
         >
-          {busy ? "Revealing…" : `Reveal "${game.word.toUpperCase()}"`}
+          {busy ? "Revealing…" : `Reveal "${game.word.toUpperCase()}" and Withdraw Escrow`}
         </button>
       ) : (
         <div className="w-full bg-foreground text-background rounded-md px-4 py-2.5 text-sm text-center font-bold">

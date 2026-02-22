@@ -456,7 +456,15 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       markEscrowWithdrawn();
       setGame((prev) => prev ? { ...prev, escrowWithdrawn: true } : prev);
     } catch (err: any) {
-      addStatus(`Withdraw error: ${err.message ?? err}`);
+      const msg = String(err.message ?? err);
+      // Contract error #16 = AlreadyWithdrawn — treat as success
+      if (msg.includes("#16") || msg.includes("AlreadyWithdrawn")) {
+        addStatus("Escrow already withdrawn ✓");
+        markEscrowWithdrawn();
+        setGame((prev) => prev ? { ...prev, escrowWithdrawn: true } : prev);
+      } else {
+        addStatus(`Withdraw error: ${msg}`);
+      }
     } finally {
       setWithdrawing(false);
     }
