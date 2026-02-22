@@ -26,7 +26,7 @@ export function Header({ wallet, addStatus, proverReady }: HeaderProps) {
           {TITLE_LETTERS.map((letter, i) => (
             <div
               key={i}
-              className="w-6 h-6 flex items-center justify-center text-[12px] font-bold uppercase rounded-[3px] border animate-flip"
+              className="w-6 h-6 flex items-center justify-center text-[14px] font-bold uppercase rounded-[3px] border animate-flip"
               style={{
                 background: `var(--${tileColors[i]})`,
                 borderColor: `var(--${tileColors[i]})`,
@@ -48,7 +48,7 @@ export function Header({ wallet, addStatus, proverReady }: HeaderProps) {
               </span>
               <button
                 onClick={wallet.disconnect}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-destructive hover:text-destructive/80 transition-colors"
               >
                 Disconnect
               </button>
