@@ -1,7 +1,7 @@
 // Game configuration & constants
 
 // The contract deployed on Stellar testnet
-export const CONTRACT_ID = "CB2HOVCC3RRKK65KKQEPMYY62VJJM7DAG74X7E4QMRHWEJPUCKL7PNNE";
+export const CONTRACT_ID = "CDYR2YNNYXZ252ARES3U3PXUFLZE3WPHA4G6V4ZPX4V35PMDPA47X6Y7";
 
 // Stellar testnet RPC
 export const RPC_URL = "https://stellar.liquify.com/api=41EEWAH79Y5OCGI7/testnet";

@@ -509,16 +509,19 @@ export async function resignOnChain(
 // ── Claim Timeout ──────────────────────────────────────────────────────
 
 /**
- * Claim a timeout win when the opponent doesn't play in time.
+ * Claim a timeout win + reveal word in a single transaction.
  */
 export async function claimTimeoutOnChain(
   gameId: string,
   publicKey: string,
   signTx: SignTransaction,
+  revealWordBytes: Uint8Array,
+  publicInputsBytes: Uint8Array,
+  proofBytes: Uint8Array,
   onStatus?: (msg: string) => void
 ): Promise<void> {
   const log = onStatus ?? console.log;
-  log("Claiming timeout…");
+  log("Claiming timeout + revealing word…");
 
   const contract = new StellarSdk.Contract(CONTRACT_ID);
 
@@ -528,13 +531,17 @@ export async function claimTimeoutOnChain(
     contract.call(
       "claim_timeout",
       new StellarSdk.Address(gameId).toScVal(),
-      new StellarSdk.Address(publicKey).toScVal()
+      new StellarSdk.Address(publicKey).toScVal(),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(revealWordBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(publicInputsBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes))
     ),
     "10000000", // 1 XLM max fee
-    log
+    log,
+    true
   );
 
-  log("Timeout claimed ✅");
+  log("Timeout claimed + word revealed ✅");
 }
 
 // ── Withdraw ───────────────────────────────────────────────────────────

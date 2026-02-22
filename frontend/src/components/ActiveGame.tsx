@@ -149,26 +149,40 @@ export function ActiveGame({
         </div>
       )}
 
-      {/* Timeout claim */}
+      {/* Timeout claim — winner reveals word */}
       {onChainPhase === PHASE.ACTIVE && !isMyTurn && oppTimeLeft !== null && oppTimeLeft <= 0 && (
-        <div className="mb-4 w-full">
+        <div className="mb-4 w-full px-5 py-4 bg-card border border-border rounded-xl text-center">
+          <p className="text-correct font-bold mb-3 text-lg">Opponent timed out! Reveal your word to claim the pot.</p>
           <button
             onClick={onClaimTimeout}
             disabled={busy}
-            className="w-full bg-destructive hover:bg-destructive/90 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-md transition-colors"
+            className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold px-6 py-2.5 rounded-md transition-colors"
           >
-            Claim Timeout Win
+            {busy ? "Revealing…" : `Reveal "${game.word.toUpperCase()}"`}
           </button>
         </div>
       )}
 
-      {/* Timed-out loser — offer New Game */}
+      {/* Timed-out loser — same style as losing by guess */}
       {onChainPhase === PHASE.ACTIVE && isMyTurn && myTimeLeft !== null && myTimeLeft <= 0 && (
         <div className="mb-4 w-full px-5 py-4 bg-card border border-border rounded-xl text-center">
-          <p className="text-destructive font-bold text-lg mb-1">Time's Up!</p>
+          <p className="text-destructive font-bold text-lg mb-1">You Lost</p>
           <p className="text-muted-foreground text-sm mb-3">
-            Your opponent can claim this game. Start a new one?
+            Time's up! Wait a moment to see your opponent's word, or start a new game.
           </p>
+          <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm mb-3">
+            <span className="inline-flex gap-0.75">
+              <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
+            </span>
+            Opponent is revealing
+            <span className="inline-flex gap-0.75">
+              <span className="animate-bounce [animation-delay:0ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:150ms] text-lg">·</span>
+              <span className="animate-bounce [animation-delay:300ms] text-lg">·</span>
+            </span>
+          </div>
           <button
             onClick={onNewGame}
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 py-2.5 rounded-md transition-colors"

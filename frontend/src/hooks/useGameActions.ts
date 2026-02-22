@@ -436,15 +436,25 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
   const handleClaimTimeout = useCallback(async () => {
     if (busy || !game || !wallet.address) return;
     setBusy(true);
+    setStatus([]);
     try {
-      await claimTimeoutOnChain(game.gameId, wallet.address, wallet.sign, addStatus);
+      addStatus("Generating reveal proof for timeout claim…");
+      const { generateProof } = await import("../generateProof");
+      const proofArtifacts = await generateProof(game.word, getGameSecret(game), addStatus);
+      const guessWordBytes = new Uint8Array(game.word.toLowerCase().split("").map((ch) => ch.charCodeAt(0)));
+
+      await claimTimeoutOnChain(
+        game.gameId, wallet.address, wallet.sign,
+        guessWordBytes, proofArtifacts.publicInputsBytes, proofArtifacts.proof, addStatus,
+      );
+      addStatus("Timeout claimed & word revealed! Game finalized.");
       await pollGameState();
     } catch (err: any) {
       addStatus(`Error: ${err.message ?? err}`);
     } finally {
       setBusy(false);
     }
-  }, [busy, game, wallet.address, wallet.sign, addStatus, pollGameState, setBusy]);
+  }, [busy, game, wallet.address, wallet.sign, addStatus, pollGameState, setBusy, setStatus]);
 
   // ── Withdraw Escrow ─────────────────────────────────────────────────
 

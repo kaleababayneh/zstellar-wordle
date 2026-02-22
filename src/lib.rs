@@ -834,10 +834,14 @@ impl TwoPlayerWordleContract {
     }
 
     /// Claim timeout: if the opponent didn't play in time, you win.
+    /// Bundles timeout claim + word reveal into a single transaction.
     pub fn claim_timeout(
         env: Env,
         game_id: Address,
         caller: Address,
+        reveal_word: Bytes,
+        public_inputs: Bytes,
+        proof_bytes: Bytes,
     ) -> Result<(), Error> {
         caller.require_auth();
 
@@ -892,13 +896,40 @@ impl TwoPlayerWordleContract {
             return Err(Error::WrongPlayer);
         }
 
-        // Caller wins by timeout
+        // Get caller's commitment and verify the reveal proof
+        let caller_commitment: BytesN<32> = if caller == player1 {
+            let c1_key = Self::key_game_c1(&game_id);
+            env.storage()
+                .temporary()
+                .get(&c1_key)
+                .ok_or(Error::NoActiveGame)?
+        } else {
+            let c2_key = Self::key_game_c2(&game_id);
+            env.storage()
+                .temporary()
+                .get(&c2_key)
+                .ok_or(Error::NoActiveGame)?
+        };
+
+        // Verify reveal: commitment + letters + all-correct results + ZK proof
+        Self::do_verify_reveal(&env, &caller_commitment, &reveal_word, &public_inputs, &proof_bytes)?;
+
+        // Store revealed word
+        let word_key = if caller == player1 {
+            Self::key_p1_word(&game_id)
+        } else {
+            Self::key_p2_word(&game_id)
+        };
+        env.storage().temporary().set(&word_key, &reveal_word);
+        env.storage().temporary().extend_ttl(&word_key, 5000, 5000);
+
+        // Set winner and finalize
         let win_key = Self::key_game_winner(&game_id);
         env.storage().temporary().set(&win_key, &caller);
         env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
         env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
 
-        // Notify game hub (caller won, so player1_won iff caller is player1)
+        // Notify game hub
         let player1_won = caller == player1;
         Self::call_end_game(&env, &game_id, player1_won);
 
