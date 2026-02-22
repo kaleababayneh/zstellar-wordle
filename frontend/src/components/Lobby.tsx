@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { OpenGame } from "../soroban";
 import { fetchOpenGames, queryGameState, getGameCreator } from "../soroban";
 import { Spinner } from "./Spinner";
-import { isWordInList } from "../gameState";
+import { isWordInList, WORD_LIST } from "../gameState";
 import { PHASE, WORD_LENGTH, STROOPS_PER_XLM } from "../config";
 
 type Tab = "open" | "create" | "join";
@@ -279,18 +279,32 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
               {/* Secret word */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Secret Word</label>
-                <input
-                  type="text"
-                  maxLength={WORD_LENGTH}
-                  value={secretWord}
-                  onChange={(e) => {
-                    setSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
-                  }}
-                  placeholder="Leave blank for random"
-                  className={`w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow ${createShake ? "animate-shake" : ""}`}
-                  onAnimationEnd={() => setCreateShake(false)}
-                  autoFocus
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    maxLength={WORD_LENGTH}
+                    value={secretWord}
+                    onChange={(e) => {
+                      setSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
+                    }}
+                    placeholder="Leave blank for random"
+                    className={`flex-1 text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow ${createShake ? "animate-shake" : ""}`}
+                    onAnimationEnd={() => setCreateShake(false)}
+                    autoFocus
+                  />
+                  <div className="relative group shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setSecretWord(WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)])}
+                      className="h-14 w-14 flex items-center justify-center rounded-md border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+                    </button>
+                    <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-[12px] font-medium text-background opacity-0 group-hover:opacity-100 transition-opacity">
+                      Random word
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Escrow */}
@@ -307,6 +321,7 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
                     className="flex-1 h-12 bg-muted border border-border rounded-md px-4 text-sm font-mono text-foreground text-center focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
                   />
                   <span className="text-muted-foreground text-sm font-semibold">XLM</span>
+                  <span className="text-xl shrink-0">💰</span>
                 </div>
                 <p className="text-muted-foreground/70 text-xs mt-1 text-center">Both players deposit. Winner takes the pot.</p>
               </div>
@@ -412,17 +427,31 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
                 <>
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Your Secret Word</label>
-                    <input
-                      type="text"
-                      maxLength={WORD_LENGTH}
-                      value={joinSecretWord}
-                      onChange={(e) => {
-                        setJoinSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
-                      }}
-                      placeholder="Leave blank for random"
-                      className={`w-full text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow ${joinShake ? "animate-shake" : ""}`}
-                      onAnimationEnd={() => setJoinShake(false)}
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        maxLength={WORD_LENGTH}
+                        value={joinSecretWord}
+                        onChange={(e) => {
+                          setJoinSecretWord(e.target.value.replace(/[^a-zA-Z]/g, "").toLowerCase().slice(0, WORD_LENGTH));
+                        }}
+                        placeholder="Leave blank for random"
+                        className={`flex-1 text-center text-xl uppercase tracking-[0.3em] font-bold h-14 bg-muted border border-border rounded-md text-foreground placeholder:tracking-normal placeholder:text-sm placeholder:normal-case placeholder:font-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 transition-shadow ${joinShake ? "animate-shake" : ""}`}
+                        onAnimationEnd={() => setJoinShake(false)}
+                      />
+                      <div className="relative group shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setJoinSecretWord(WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)])}
+                          className="h-14 w-14 flex items-center justify-center rounded-md border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+                        </button>
+                        <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-[10px] font-medium text-background opacity-0 group-hover:opacity-100 transition-opacity">
+                          Random word
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   <button

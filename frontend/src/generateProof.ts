@@ -35,7 +35,7 @@ export function preloadProver(onStatus?: (msg: string) => void): Promise<void> {
 
   _initPromise = (async () => {
     const t0 = performance.now();
-    log("Pre-loading Noir + Barretenberg WASM…");
+    //log("Pre-loading Noir + Barretenberg WASM…");
 
     _noir = new Noir(circuitJson as unknown as CompiledCircuit);
     log(`Noir initialized in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
