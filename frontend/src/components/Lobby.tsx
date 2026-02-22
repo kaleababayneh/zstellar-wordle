@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { OpenGame } from "../soroban";
 import { fetchOpenGames, queryGameState, getGameCreator } from "../soroban";
 import { Spinner } from "./Spinner";
+import { HowToPlay } from "./HowToPlay";
 import { isWordInList, WORD_LIST } from "../gameState";
 import { PHASE, WORD_LENGTH, STROOPS_PER_XLM } from "../config";
 
@@ -51,6 +52,7 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [createShake, setCreateShake] = useState(false);
   const [joinShake, setJoinShake] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     clearTimeout(toastTimer.current);
@@ -154,8 +156,18 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
 
   return (
     <div className="w-full max-w-lg">
+      {/* How to Play modal */}
+      <HowToPlay open={showHelp} onClose={() => setShowHelp(false)} />
+
       {/* Tab bar */}
       <div className="flex items-center justify-center gap-1 border-b border-border mb-6">
+        <button
+          onClick={() => setShowHelp(true)}
+          className="px-2 py-1 text-muted-foreground hover:text-foreground transition-colors"
+          title="How to Play"
+        >
+          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
         <button className={tabClass("open")} onClick={() => setTab("open")}>
           Games {openGames.length > 0 && <span className="ml-1 text-xs font-mono text-primary">{openGames.length}</span>}
         </button>
