@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { FreighterState } from "../hooks/useFreighter";
 import { CONTRACT_ID } from "../config";
 
@@ -18,27 +18,72 @@ interface HeaderProps {
 
 export function Header({ wallet, addStatus, proverReady }: HeaderProps) {
   const tileColors = useMemo(randomColors, []);
+  const [revealed, setRevealed] = useState<boolean[]>(() => TITLE_LETTERS.map(() => false));
+
+  useEffect(() => {
+    const timers = TITLE_LETTERS.map((_, i) =>
+      setTimeout(() => {
+        setRevealed((prev) => {
+          const next = [...prev];
+          next[i] = true;
+          return next;
+        });
+      }, 300 + i * 150)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
 
   return (
     <header className="w-full border-b border-border">
       <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
         <div className="flex items-center select-none">
-          {TITLE_LETTERS.map((letter, i) => (
-            <div
-              key={i}
-              className="w-6 h-6 flex items-center justify-center text-[14px] font-bold uppercase rounded-[3px] border animate-flip"
-              style={{
-                background: `var(--${tileColors[i]})`,
-                borderColor: `var(--${tileColors[i]})`,
-                color: tileColors[i] === "absent" ? "var(--foreground)" : "var(--background)",
-                animationDelay: `${i * 200}ms`,
-                animationFillMode: "backwards",
-                marginLeft: WORD_BREAKS.includes(i) ? "12px" : i > 0 ? "4px" : "0",
-              }}
-            >
-              {letter}
-            </div>
-          ))}
+          {TITLE_LETTERS.map((letter, i) => {
+            const color = tileColors[i];
+            const isFlipped = revealed[i];
+            return (
+              <div
+                key={i}
+                style={{
+                  perspective: "400px",
+                  width: 24,
+                  height: 24,
+                  marginLeft: WORD_BREAKS.includes(i) ? 12 : i > 0 ? 4 : 0,
+                }}
+              >
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    transformStyle: "preserve-3d",
+                    transition: "transform 0.5s ease-in-out",
+                    transform: isFlipped ? "rotateX(180deg)" : "rotateX(0)",
+                  }}
+                >
+                  {/* Front — plain tile */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center text-[14px] font-bold uppercase rounded-[3px] border-2 border-border text-foreground bg-transparent"
+                    style={{ backfaceVisibility: "hidden" }}
+                  >
+                    {letter}
+                  </div>
+                  {/* Back — colored tile */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center text-[14px] font-bold uppercase rounded-[3px] border-2"
+                    style={{
+                      backfaceVisibility: "hidden",
+                      transform: "rotateX(180deg)",
+                      background: `var(--${color})`,
+                      borderColor: `var(--${color})`,
+                      color: color === "absent" ? "var(--foreground)" : "var(--background)",
+                    }}
+                  >
+                    {letter}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="flex items-center gap-2">
           {wallet.address ? (

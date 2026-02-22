@@ -1,4 +1,6 @@
-export function LandingHero() {
+export function LandingHero({ compact = false }: { compact?: boolean }) {
+  if (compact) return null;
+
   return (
     <section className="w-full flex flex-col items-center text-center py-10 gap-8 animate-fade-in-up">
       {/* Headline */}
@@ -8,7 +10,7 @@ export function LandingHero() {
           <span className="text-primary">Break the Code.</span>
         </h2>
         <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-          Challenge a friend to a Wordle duel secured by zkps on{" "}
+          Challenge a friend to a Wordle duel secured by zero knowledge proofs on{" "}
           <span className="text-foreground font-medium">Stellar</span>. Pick a secret word,
           stake XLM, and let cryptography keep it fair.
         </p>

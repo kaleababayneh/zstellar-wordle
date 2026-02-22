@@ -161,7 +161,7 @@ export function Lobby({ currentAddress, busy, onJoinGame, onCreateGame }: LobbyP
       <HowToPlay open={showHelp} onClose={() => setShowHelp(false)} />
 
       {/* Landing hero */}
-      <LandingHero />
+      <LandingHero compact={tab === "create" || tab === "join"} />
 
       {/* Tab bar */}
       <div className="flex items-center justify-center gap-1 border-b border-border mb-6">
