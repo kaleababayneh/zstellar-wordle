@@ -1,10 +1,10 @@
 # ZK Wordle on Stellar
 
-A **peer-to-peer Wordle** where each player picks a secret word and races to guess the opponent's. Both players' secret words stay privately in the browser while proven correct with zero-knowledge proofs written in Noir. The proofs are verified on-chain via a Soroban smart contract on the Stellar testnet. Optional XLM escrow makes it a stakes game.
+A **peer-to-peer Wordle** where each player picks a secret word and races to guess the opponent's. Both players' secret words stay privately in the browser while proven correct with zero-knowledge proofs using circuits written in Noir. The proofs are verified on-chain via a Soroban smart contract on the Stellar testnet. Optional XLM escrow makes it a stakes game.
 
 ## Why Zero-Knowledge?
 
-Simply hashing a word and committing it on-chain is vulnerable to dictionary brute-force attacks, after all, there are only ~12K five-letter English words. ZK proofs solve this: each secret word is hashed together with a random private **salt** using Poseidon2, and only the resulting commitment is stored on-chain, making it impractical to reverse engineer the word from the commitment. The word and salt never leave the player's device. Without the salt, an attacker only needs ~12,653 Poseidon2 hashes to crack any commitment—trivial in milliseconds. The salt is a **Field** element with **64 bits of entropy** (8 cryptographically random bytes via `crypto.getRandomValues`), making the brute-force space **12,653 × 2⁶⁴ ≈ 2.3 × 10²³** combinations; at **1 billion hashes/sec** this would take **~7.4 million years**.
+Simply hashing a word and committing it on-chain is vulnerable to dictionary brute-force attacks, after all, there are only ~12K five-letter English words. ZK proofs solve this: each secret word is hashed together with a random private **salt** using Poseidon2, and only the resulting commitment is stored on-chain, making it impractical to reverse engineer the word from the commitment. The word and salt never leave the player's device. Without the salt, an attacker only needs ~12,653 Poseidon2 hashes to crack any commitment—trivial in milliseconds. The salt is a **Field** element with **64 bits of entropy** (8 random bytes), making the brute-force space **12,653 × 2⁶⁴ ≈ 2.3 × 10²³** combinations; at **1 billion hashes/sec** this would take **~7.4 million years**.
 
 When a player makes a guess, the opponent generates the wordle result (🟩🟨⬛) locally and send the result of the guess along with  a ZK proof that the result is computed honestly against the already-committed word. The proof is verified on-chain, each guess result is proven correct *without ever revealing the secret word*.
 
@@ -57,9 +57,9 @@ We also need to ensure every word — both committed and guessed — is a valid 
 | Layer | Tech | What It Does |
 |-------|------|-------------|
 | **Circuits** | [Noir](https://noir-lang.org/) | `circuit-word-guess/` — proves wordle feedback is correct given a committed word. `circuit-word-commit/` — proves the committed word exists in the dictionary (Poseidon2 Merkle proof inside ZK) |
-| **On-chain verifier** | Rust / [UltraHonk](https://github.com/AztecProtocol/barretenberg) | `wordle-soroban-verifier/` — Soroban-compatible UltraHonk verification library (MIT-licensed), used by the main contract for both guess-result and word-commit proof verification |
+| **On-chain verifier** | Rust / [UltraHonk](https://github.com/AztecProtocol/barretenberg) | `wordle-soroban-verifier/` — Soroban-compatible UltraHonk verification library, used by the main contract for both guess-result and word-commit proof verification |
 | **Smart contract** | [Soroban](https://soroban.stellar.org/) (Rust) | `src/lib.rs` — two-player game state machine (create → join → active → reveal/draw → finalize), chess clock timer, XLM escrow, on-chain ZK proof & Merkle verification, game hub integration |
-| **Frontend** | React 19 · TypeScript · Vite · Tailwind CSS v4 | `frontend/` — in-browser proof generation via `@aztec/bb.js` WASM + `@noir-lang/noir_js`, Freighter wallet integration, lobby system, real-time game UI |
+| **Frontend** | React · TypeScript · Tailwind CSS | `frontend/` — in-browser proof generation via `@aztec/bb.js` WASM + `@noir-lang/noir_js`, Freighter wallet integration, lobby system, real-time game UI |
 | **Merkle tree** | Node.js | `js-scripts/` — precomputes Poseidon2 Merkle tree of 12,653 five-letter words (depth 14) |
 
 ## Key Design Decisions

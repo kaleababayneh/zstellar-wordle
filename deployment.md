@@ -9,7 +9,7 @@ stellar contract build --optimize
 ## 2. Deploy to Testnet
 
 The constructor requires two verification keys:
-- `vk_bytes` — guess-result circuit VK (`circuit/target/vk`)
+- `vk_bytes` — guess-result circuit VK (`circuit-word-guess/target/vk`)
 - `wc_vk_bytes` — word-commit circuit VK (`circuit-word-commit/target/vk`)
 
 ```bash
