@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { PHASE, POLL_INTERVAL_MS } from "../config";
 import { calculateWordleResults } from "../gameLogic";
 import type { GuessEntry } from "../gameState";
@@ -9,6 +9,7 @@ import {
   updateMyGuessResults,
 } from "../gameState";
 import { queryGameState } from "../soroban";
+import { sessionKeyService } from "../services/sessionKeyService";
 import type { UseGameReturn } from "./useGame";
 
 /**
@@ -221,6 +222,34 @@ export function useGamePolling(gs: UseGameReturn) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [game, gameOver, isMyTurn, myTimeLeft, oppTimeLeft, onChainPhase, setDrawDeadline, setMyTimeLeft, setOppTimeLeft, timerRef]);
+  // ── Auto-reclaim session key funds when game ends ─────────────────────
+
+  const reclaimedRef = useRef(false);
+
+  useEffect(() => {
+    // Reset the ref when the game changes
+    if (!game) {
+      reclaimedRef.current = false;
+      return;
+    }
+
+    const isGameOver = onChainPhase === PHASE.FINALIZED || onChainPhase === PHASE.DRAW;
+    if (!isGameOver || reclaimedRef.current) return;
+    if (!game.myAddress || !sessionKeyService.isReady(game.gameId)) return;
+
+    reclaimedRef.current = true; // prevent repeated attempts
+
+    (async () => {
+      try {
+        console.log("[SessionKey] Game over — auto-reclaiming session key funds…");
+        await sessionKeyService.reclaimFunds(game.myAddress);
+        console.log("[SessionKey] Funds reclaimed ✅");
+        sessionKeyService.clear();
+      } catch (err) {
+        console.warn("[SessionKey] Auto-reclaim failed:", err);
+      }
+    })();
+  }, [game, onChainPhase]);
 
   return { pollGameState };
 }

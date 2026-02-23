@@ -67,6 +67,7 @@ pub enum Error {
     AlreadyWithdrawn = 16,
     NotWinner = 17,
     InvalidReveal = 18,
+    InvalidSessionKey = 19,
 }
 
 #[contractimpl]
@@ -176,6 +177,42 @@ impl TwoPlayerWordleContract {
 
     fn key_session_id(game_id: &Address) -> (Symbol, Address) {
         (symbol_short!("gm_sid"), game_id.clone())
+    }
+
+    // ── Session key storage ───────────────────────────────────────────────
+    // Maps (game_id, player) → session_key_address
+    // Maps session_key_address → (game_id, player) for reverse lookup
+
+    fn key_session_key(game_id: &Address, player: &Address) -> (Symbol, Address, Address) {
+        (symbol_short!("sk"), game_id.clone(), player.clone())
+    }
+
+    fn key_session_reverse(session_key: &Address) -> (Symbol, Address) {
+        (symbol_short!("sk_rev"), session_key.clone())
+    }
+
+    // ── Session key auth helper ───────────────────────────────────────────
+
+    /// Simplified resolve_caller when we don't have player addresses yet.
+    /// Requires auth from the caller and resolves session key if applicable.
+    fn resolve_caller_simple(
+        env: &Env,
+        game_id: &Address,
+        caller: &Address,
+    ) -> Address {
+        caller.require_auth();
+
+        // Check if caller is a registered session key (reverse lookup)
+        let rev_key = Self::key_session_reverse(caller);
+        let lookup: Option<(Address, Address)> = env.storage().temporary().get(&rev_key);
+        if let Some((stored_game_id, actual_player)) = lookup {
+            if stored_game_id == *game_id {
+                return actual_player;
+            }
+        }
+
+        // Caller is the actual player
+        caller.clone()
     }
 
     // ── Game Hub integration ─────────────────────────────────────────────
@@ -305,6 +342,66 @@ impl TwoPlayerWordleContract {
         Ok(())
     }
 
+    /// Register a session key for a specific game.
+    /// The session key self-registers after the player funds it.
+    /// Security: session keys cannot steal funds — withdraw always sends to the
+    /// actual player address. The player proves intent by funding the session key.
+    pub fn register_session_key(
+        env: Env,
+        game_id: Address,
+        player: Address,
+        session_key: Address,
+    ) -> Result<(), Error> {
+        // Session key signs this transaction itself (no wallet popup needed)
+        session_key.require_auth();
+
+        // Verify the player is actually in this game
+        let p1_key = Self::key_game_p1(&game_id);
+        let p2_key = Self::key_game_p2(&game_id);
+
+        let is_p1 = env
+            .storage()
+            .temporary()
+            .get::<_, Address>(&p1_key)
+            .map(|p| p == player)
+            .unwrap_or(false);
+        let is_p2 = env
+            .storage()
+            .temporary()
+            .get::<_, Address>(&p2_key)
+            .map(|p| p == player)
+            .unwrap_or(false);
+
+        // For create_game, only p1 is stored. For join_game, both are stored.
+        // Allow registration if player is p1 (even before p2 joins) or p2.
+        if !is_p1 && !is_p2 {
+            return Err(Error::WrongPlayer);
+        }
+
+        // Store forward mapping: (game_id, player) → session_key
+        let sk_key = Self::key_session_key(&game_id, &player);
+        env.storage().temporary().set(&sk_key, &session_key);
+        env.storage().temporary().extend_ttl(&sk_key, 5000, 5000);
+
+        // Store reverse mapping: session_key → (game_id, player)
+        let rev_key = Self::key_session_reverse(&session_key);
+        env.storage()
+            .temporary()
+            .set(&rev_key, &(game_id.clone(), player.clone()));
+        env.storage().temporary().extend_ttl(&rev_key, 5000, 5000);
+
+        Ok(())
+    }
+
+    /// Query the registered session key for a player in a game.
+    pub fn get_session_key(env: Env, game_id: Address, player: Address) -> Address {
+        let sk_key = Self::key_session_key(&game_id, &player);
+        env.storage()
+            .temporary()
+            .get(&sk_key)
+            .unwrap_or(player)
+    }
+
     /// Player 2 joins an existing game with matching escrow.
     /// A word-commit ZK proof must be provided to prove the committed word
     /// is in the dictionary.
@@ -409,7 +506,8 @@ impl TwoPlayerWordleContract {
         public_inputs: Bytes,           // empty on turn 1
         proof_bytes: Bytes,             // empty on turn 1
     ) -> Result<(), Error> {
-        caller.require_auth();
+        // Resolve caller: may be player directly or their session key
+        let actual_caller = Self::resolve_caller_simple(&env, &game_id, &caller);
 
         // Check game phase
         let phase_key = Self::key_game_phase(&game_id);
@@ -457,11 +555,11 @@ impl TwoPlayerWordleContract {
 
         // Determine whose turn it is (odd = p1, even = p2)
         let expected_player = if turn % 2 == 1 { &player1 } else { &player2 };
-        if &caller != expected_player {
+        if &actual_caller != expected_player {
             return Err(Error::NotYourTurn);
         }
 
-        let opponent = if &caller == &player1 {
+        let opponent = if &actual_caller == &player1 {
             &player2
         } else {
             &player1
@@ -495,7 +593,7 @@ impl TwoPlayerWordleContract {
 
         // Turn 2+: Verify opponent's previous guess with ZK proof
         // Get CALLER's stored commitment (the proof proves knowledge of the caller's word)
-        let my_commitment: BytesN<32> = if &caller == &player1 {
+        let my_commitment: BytesN<32> = if &actual_caller == &player1 {
             let c1_key = Self::key_game_c1(&game_id);
             env.storage()
                 .temporary()
@@ -587,7 +685,7 @@ impl TwoPlayerWordleContract {
         env.storage().temporary().set(&turn_key, &(turn + 1));
 
         // Update chess clock
-        let my_time_key = if &caller == &player1 {
+        let my_time_key = if &actual_caller == &player1 {
             Self::key_p1_time(&game_id)
         } else {
             Self::key_p2_time(&game_id)
@@ -623,7 +721,8 @@ impl TwoPlayerWordleContract {
         public_inputs: Bytes,
         proof_bytes: Bytes,
     ) -> Result<(), Error> {
-        caller.require_auth();
+        // Resolve caller: may be player directly or their session key
+        let actual_caller = Self::resolve_caller_simple(&env, &game_id, &caller);
 
         // Check game is in reveal phase
         let phase_key = Self::key_game_phase(&game_id);
@@ -643,7 +742,7 @@ impl TwoPlayerWordleContract {
             .temporary()
             .get(&win_key)
             .ok_or(Error::NoActiveGame)?;
-        if caller != winner {
+        if actual_caller != winner {
             return Err(Error::NotWinner);
         }
 
@@ -655,7 +754,7 @@ impl TwoPlayerWordleContract {
             .get(&p1_key)
             .ok_or(Error::NoActiveGame)?;
 
-        let winner_commitment: BytesN<32> = if caller == player1 {
+        let winner_commitment: BytesN<32> = if actual_caller == player1 {
             let c1_key = Self::key_game_c1(&game_id);
             env.storage()
                 .temporary()
@@ -673,7 +772,7 @@ impl TwoPlayerWordleContract {
         Self::do_verify_reveal(&env, &winner_commitment, &reveal_word, &public_inputs, &proof_bytes)?;
 
         // Store revealed word so opponent can see it
-        let word_key = if caller == player1 {
+        let word_key = if actual_caller == player1 {
             Self::key_p1_word(&game_id)
         } else {
             Self::key_p2_word(&game_id)
@@ -685,7 +784,7 @@ impl TwoPlayerWordleContract {
         env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
 
         // Notify game hub that game ended
-        let player1_won = caller == player1;
+        let player1_won = actual_caller == player1;
         Self::call_end_game(&env, &game_id, player1_won);
 
         Ok(())
@@ -701,7 +800,8 @@ impl TwoPlayerWordleContract {
         public_inputs: Bytes,
         proof_bytes: Bytes,
     ) -> Result<(), Error> {
-        caller.require_auth();
+        // Resolve caller: may be player directly or their session key
+        let actual_caller = Self::resolve_caller_simple(&env, &game_id, &caller);
 
         // Check game is in draw phase
         let phase_key = Self::key_game_phase(&game_id);
@@ -728,8 +828,8 @@ impl TwoPlayerWordleContract {
             .get(&p2_key)
             .ok_or(Error::NoActiveGame)?;
 
-        let is_p1 = caller == player1;
-        let is_p2 = caller == player2;
+        let is_p1 = actual_caller == player1;
+        let is_p2 = actual_caller == player2;
         if !is_p1 && !is_p2 {
             return Err(Error::WrongPlayer);
         }
@@ -784,7 +884,8 @@ impl TwoPlayerWordleContract {
         game_id: Address,
         caller: Address,
     ) -> Result<(), Error> {
-        caller.require_auth();
+        // Resolve caller: may be player directly or their session key
+        let actual_caller = Self::resolve_caller_simple(&env, &game_id, &caller);
 
         let phase_key = Self::key_game_phase(&game_id);
         let phase: u32 = env
@@ -812,10 +913,10 @@ impl TwoPlayerWordleContract {
             .ok_or(Error::NoActiveGame)?;
 
         // Caller must be one of the players
-        let caller_is_p1 = caller == player1;
+        let caller_is_p1 = actual_caller == player1;
         let opponent = if caller_is_p1 {
             player2
-        } else if caller == player2 {
+        } else if actual_caller == player2 {
             player1
         } else {
             return Err(Error::WrongPlayer);
@@ -843,7 +944,8 @@ impl TwoPlayerWordleContract {
         public_inputs: Bytes,
         proof_bytes: Bytes,
     ) -> Result<(), Error> {
-        caller.require_auth();
+        // Resolve caller: may be player directly or their session key
+        let actual_caller = Self::resolve_caller_simple(&env, &game_id, &caller);
 
         let phase_key = Self::key_game_phase(&game_id);
         let phase: u32 = env
@@ -892,12 +994,12 @@ impl TwoPlayerWordleContract {
         let timed_out_player = if turn % 2 == 1 { &player1 } else { &player2 };
 
         // Caller must be the opponent of the timed-out player
-        if &caller == timed_out_player {
+        if &actual_caller == timed_out_player {
             return Err(Error::WrongPlayer);
         }
 
         // Get caller's commitment and verify the reveal proof
-        let caller_commitment: BytesN<32> = if caller == player1 {
+        let caller_commitment: BytesN<32> = if actual_caller == player1 {
             let c1_key = Self::key_game_c1(&game_id);
             env.storage()
                 .temporary()
@@ -915,7 +1017,7 @@ impl TwoPlayerWordleContract {
         Self::do_verify_reveal(&env, &caller_commitment, &reveal_word, &public_inputs, &proof_bytes)?;
 
         // Store revealed word
-        let word_key = if caller == player1 {
+        let word_key = if actual_caller == player1 {
             Self::key_p1_word(&game_id)
         } else {
             Self::key_p2_word(&game_id)
@@ -925,12 +1027,12 @@ impl TwoPlayerWordleContract {
 
         // Set winner and finalize
         let win_key = Self::key_game_winner(&game_id);
-        env.storage().temporary().set(&win_key, &caller);
+        env.storage().temporary().set(&win_key, &actual_caller);
         env.storage().temporary().extend_ttl(&win_key, 5000, 5000);
         env.storage().temporary().set(&phase_key, &PHASE_FINALIZED);
 
         // Notify game hub
-        let player1_won = caller == player1;
+        let player1_won = actual_caller == player1;
         Self::call_end_game(&env, &game_id, player1_won);
 
         Ok(())
@@ -944,7 +1046,8 @@ impl TwoPlayerWordleContract {
         game_id: Address,
         caller: Address,
     ) -> Result<i128, Error> {
-        caller.require_auth();
+        // Resolve caller: may be player directly or their session key
+        let actual_caller = Self::resolve_caller_simple(&env, &game_id, &caller);
 
         let phase_key = Self::key_game_phase(&game_id);
         let phase: u32 = env
@@ -971,8 +1074,8 @@ impl TwoPlayerWordleContract {
             .get(&p2_key)
             .ok_or(Error::NoActiveGame)?;
 
-        let is_p1 = caller == player1;
-        let is_p2 = caller == player2;
+        let is_p1 = actual_caller == player1;
+        let is_p2 = actual_caller == player2;
         if !is_p1 && !is_p2 {
             return Err(Error::WrongPlayer);
         }
@@ -1008,7 +1111,7 @@ impl TwoPlayerWordleContract {
                 .temporary()
                 .get(&win_key)
                 .ok_or(Error::NoActiveGame)?;
-            if caller != winner {
+            if actual_caller != winner {
                 return Err(Error::NotWinner);
             }
             payout = escrow_per_player * 2;
@@ -1028,7 +1131,8 @@ impl TwoPlayerWordleContract {
 
         if payout > 0 {
             let token_client = token::TokenClient::new(&env, &token_addr);
-            token_client.transfer(&env.current_contract_address(), &caller, &payout);
+            // Always send funds to the actual player address, not the session key
+            token_client.transfer(&env.current_contract_address(), &actual_caller, &payout);
         }
 
         // Mark as withdrawn

@@ -25,7 +25,9 @@ import {
   resignOnChain,
   withdrawEscrow,
   queryGameState,
+  registerSessionKeyOnChain,
 } from "../soroban";
+import { sessionKeyService } from "../services/sessionKeyService";
 import type { UseGameReturn } from "./useGame";
 import type { FreighterState } from "./useFreighter";
 
@@ -91,6 +93,22 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
         escrowXlm, wcProof.publicInputsBytes, wcProof.proof, addStatus,
       );
 
+      addStatus("Game created on-chain ✅");
+
+      // ── Session key: init + fund + register on-chain ──
+      const sk = sessionKeyService.initSessionKey(gameId);
+      addStatus(`Funding session key ${sk.publicKey.slice(0, 8)}… with 20 XLM…`);
+      try {
+        await sessionKeyService.fundFromWallet(wallet.address, wallet.sign);
+        addStatus(`Registering session key on-chain…`);
+        await registerSessionKeyOnChain(
+          gameId, wallet.address, sk.publicKey, sessionKeyService.getSignFunction(), addStatus
+        );
+        sessionKeyService.markRegistered();
+      } catch (skErr: any) {
+        addStatus(`⚠️ Session key setup failed: ${skErr.message}. You'll need to approve each move manually.`);
+      }
+
       addMyGameEntry({ gameId, role: "p1", createdAt: Date.now() });
 
       setGame(newGame);
@@ -154,6 +172,22 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
         gameId, wallet.address, wallet.sign, commitBytes,
         wcProof.publicInputsBytes, wcProof.proof, addStatus,
       );
+
+      addStatus("Joined game on-chain ✅");
+
+      // ── Session key: init + fund + register on-chain ──
+      const sk = sessionKeyService.initSessionKey(gameId);
+      addStatus(`Funding session key ${sk.publicKey.slice(0, 8)}… with 20 XLM…`);
+      try {
+        await sessionKeyService.fundFromWallet(wallet.address, wallet.sign);
+        addStatus(`Registering session key on-chain…`);
+        await registerSessionKeyOnChain(
+          gameId, wallet.address, sk.publicKey, sessionKeyService.getSignFunction(), addStatus
+        );
+        sessionKeyService.markRegistered();
+      } catch (skErr: any) {
+        addStatus(`⚠️ Session key setup failed: ${skErr.message}. You'll need to approve each move manually.`);
+      }
 
       addMyGameEntry({ gameId, role: "p2", createdAt: Date.now() });
 
@@ -266,8 +300,18 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       setCurrentGuess("");
 
       addStatus("Submitting turn on Stellar testnet…");
+
+      // Use session key signer if available, otherwise fall back to Freighter
+      const useSessionKey = sessionKeyService.isReady(game.gameId);
+      const signerAddress = useSessionKey
+        ? sessionKeyService.getPublicKey()!
+        : wallet.address;
+      const signFn = useSessionKey
+        ? sessionKeyService.getSignFunction()
+        : wallet.sign;
+
       await submitTurnOnChain(
-        game.gameId, wallet.address, wallet.sign,
+        game.gameId, signerAddress, signFn,
         guessWordBytes, pathElementsBytes, pathIndices,
         publicInputsBytes, proofBytes, addStatus,
       );
@@ -278,7 +322,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
         if (postSubmit) {
           for (let i = postSubmit.opponentGuesses.length - 1; i >= 0; i--) {
             if (!postSubmit.opponentGuesses[i].verified &&
-                postSubmit.opponentGuesses[i].word === verifiedGuessWord) {
+              postSubmit.opponentGuesses[i].word === verifiedGuessWord) {
               postSubmit.opponentGuesses[i].verified = true;
               postSubmit.opponentGuesses[i].results = verifiedResults;
               saveGame(postSubmit);
@@ -333,7 +377,9 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       const proofArtifacts = await generateProof(lastUnverified.word, getGameSecret(game), addStatus);
 
       await submitTurnOnChain(
-        game.gameId, wallet.address, wallet.sign,
+        game.gameId,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getPublicKey()! : wallet.address,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getSignFunction() : wallet.sign,
         new Uint8Array(0), [], [],
         proofArtifacts.publicInputsBytes, proofArtifacts.proof, addStatus,
       );
@@ -372,7 +418,9 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       const guessWordBytes = new Uint8Array(game.word.toLowerCase().split("").map((ch) => ch.charCodeAt(0)));
 
       await revealWordOnChain(
-        game.gameId, wallet.address, wallet.sign,
+        game.gameId,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getPublicKey()! : wallet.address,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getSignFunction() : wallet.sign,
         guessWordBytes, proofArtifacts.publicInputsBytes, proofArtifacts.proof, addStatus,
       );
 
@@ -399,7 +447,9 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       const guessWordBytes = new Uint8Array(game.word.toLowerCase().split("").map((ch) => ch.charCodeAt(0)));
 
       await revealWordDrawOnChain(
-        game.gameId, wallet.address, wallet.sign,
+        game.gameId,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getPublicKey()! : wallet.address,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getSignFunction() : wallet.sign,
         guessWordBytes, proofArtifacts.publicInputsBytes, proofArtifacts.proof, addStatus,
       );
 
@@ -422,7 +472,12 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
     if (busy || !game || !wallet.address) return;
     setBusy(true);
     try {
-      await resignOnChain(game.gameId, wallet.address, wallet.sign, addStatus);
+      await resignOnChain(
+        game.gameId,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getPublicKey()! : wallet.address,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getSignFunction() : wallet.sign,
+        addStatus,
+      );
       await pollGameState();
     } catch (err: any) {
       addStatus(`Error: ${err.message ?? err}`);
@@ -444,7 +499,9 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       const guessWordBytes = new Uint8Array(game.word.toLowerCase().split("").map((ch) => ch.charCodeAt(0)));
 
       await claimTimeoutOnChain(
-        game.gameId, wallet.address, wallet.sign,
+        game.gameId,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getPublicKey()! : wallet.address,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getSignFunction() : wallet.sign,
         guessWordBytes, proofArtifacts.publicInputsBytes, proofArtifacts.proof, addStatus,
       );
       addStatus("Timeout claimed & word revealed! Game finalized.");
@@ -462,7 +519,12 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
     if (withdrawing || !wallet.address || !game) return;
     setWithdrawing(true);
     try {
-      await withdrawEscrow(game.gameId, wallet.address, wallet.sign, addStatus);
+      await withdrawEscrow(
+        game.gameId,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getPublicKey()! : wallet.address,
+        sessionKeyService.isReady(game.gameId) ? sessionKeyService.getSignFunction() : wallet.sign,
+        addStatus,
+      );
       markEscrowWithdrawn();
       setGame((prev) => prev ? { ...prev, escrowWithdrawn: true } : prev);
     } catch (err: any) {
@@ -476,6 +538,17 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
         addStatus(`Withdraw error: ${msg}`);
       }
     } finally {
+      // Always reclaim session key funds (works for winner AND loser)
+      if (sessionKeyService.isReady(game.gameId)) {
+        try {
+          addStatus("Reclaiming session key funds…");
+          await sessionKeyService.reclaimFunds(wallet.address);
+          addStatus("Session key 20 XLM reclaimed ✅");
+          sessionKeyService.clear();
+        } catch (reclaimErr: any) {
+          addStatus(`⚠️ Fund reclaim skipped: ${reclaimErr.message}`);
+        }
+      }
       setWithdrawing(false);
     }
   }, [withdrawing, wallet.address, wallet.sign, game, addStatus, setWithdrawing, setGame]);

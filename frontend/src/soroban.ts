@@ -575,7 +575,44 @@ export async function withdrawEscrow(
   log("Escrow withdrawn ✅");
 }
 
+// ── Session Key Registration ──────────────────────────────────────────
+
+/**
+ * Register a session key on-chain for a specific game.
+ * The session key self-registers (no Freighter popup needed).
+ * Must be called AFTER the session key account is funded.
+ */
+export async function registerSessionKeyOnChain(
+  gameId: string,
+  playerPublicKey: string,
+  sessionKeyPublicKey: string,
+  sessionSignTx: SignTransaction,
+  onStatus?: (msg: string) => void
+): Promise<void> {
+  const log = onStatus ?? console.log;
+  log("Registering session key on-chain…");
+
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+
+  // Session key is the transaction source AND signer (silent — no wallet popup)
+  await buildSignSubmit(
+    sessionKeyPublicKey,
+    sessionSignTx,
+    contract.call(
+      "register_session_key",
+      new StellarSdk.Address(gameId).toScVal(),
+      new StellarSdk.Address(playerPublicKey).toScVal(),
+      new StellarSdk.Address(sessionKeyPublicKey).toScVal()
+    ),
+    "10000000", // 1 XLM max fee
+    log
+  );
+
+  log("Session key registered ✅ (no more popups for gameplay!)");
+}
+
 // ── Lobby: Fetch open games ──────────────────────────────────────────────
+
 
 export interface OpenGame {
   gameId: string;
@@ -765,7 +802,7 @@ export async function fetchGameSummaries(gameIds: string[]): Promise<GameSummary
         const turn = turnVal ? (turnVal.value() as number) : 0;
         let creator = "";
         if (creatorVal) {
-          try { creator = StellarSdk.Address.fromScVal(creatorVal).toString(); } catch {}
+          try { creator = StellarSdk.Address.fromScVal(creatorVal).toString(); } catch { }
         }
         return {
           gameId: id,
