@@ -17,7 +17,7 @@ We also need to ensure every word — both committed and guessed — is a valid 
     │ Player 1 │                                                    │ Player 2 │
     └────┬─────┘                                                    └────┬─────┘
          │  choose word + salt                        choose word + salt │
-         │  compute commitment                        compute commitment│
+         │  compute commitment                        compute commitment │
          │                                                               │
   ╔══════╪═══════════════════════  SETUP  ═══════════════════════════════╪══════╗
   ║      │                                                               │      ║
@@ -28,7 +28,7 @@ We also need to ensure every word — both committed and guessed — is a valid 
   ║      │                                word-commit ZK proof           │      ║
   ╚══════╪═══════════════════════════════════════════════════════════════╪══════╝
          │                                                               │
-  ╔══════╪═════════════════  ACTIVE PLAY (max 13 turns)  ═══════════════╪══════╗
+  ╔══════╪═════════════════  ACTIVE PLAY (max 13 turns)   ═══════════════╪══════╗
   ║      │                                                               │      ║
   ║      ├── submit_turn (guess only) ──▶ T1: Merkle ✓, store guess      │      ║
   ║      │                                                               │      ║
@@ -44,8 +44,8 @@ We also need to ensure every word — both committed and guessed — is a valid 
   ╔══════╪═══════════════════════  END GAME  ════════════════════════════╪══════╗
   ║      │                                                               │      ║
   ║      │  🏆 win ──▶ reveal_word (ZK proof) ──▶ finalize + withdraw    │      ║
-  ║      │  🤝 draw ─▶ both reveal_word_draw ──▶ each withdraws escrow  │      ║
-  ║      │  🏳️ resign ──────────────────────────▶ opponent wins           │      ║
+  ║      │  🤝 draw ─▶ both reveal_word_draw ──▶ each withdraws escrow   │      ║
+  ║      │  🏳️ resign ──────────────────────────▶ opponent wins          │      ║
   ║      │  ⏱️ timeout ─▶ claim_timeout ────────▶ claimer wins           │      ║
   ║      │                                                               │      ║
   ╚══════╪═══════════════════════════════════════════════════════════════╪══════╝
@@ -57,7 +57,7 @@ We also need to ensure every word — both committed and guessed — is a valid 
 | Layer | Tech | What It Does |
 |-------|------|-------------|
 | **Circuits** | [Noir](https://noir-lang.org/) | `circuit-word-guess/` — proves wordle feedback is correct given a committed word. `circuit-word-commit/` — proves the committed word exists in the dictionary (Poseidon2 Merkle proof inside ZK) |
-| **On-chain verifier** | Rust / [UltraHonk](https://github.com/AztecProtocol/barretenberg) | `word-guess-verifier/` — Soroban-compatible UltraHonk verification library (MIT-licensed). `word-commit-verifier/` — standalone word-commit verifier contract |
+| **On-chain verifier** | Rust / [UltraHonk](https://github.com/AztecProtocol/barretenberg) | `wordle-soroban-verifier/` — Soroban-compatible UltraHonk verification library (MIT-licensed), used by the main contract for both guess-result and word-commit proof verification |
 | **Smart contract** | [Soroban](https://soroban.stellar.org/) (Rust) | `src/lib.rs` — two-player game state machine (create → join → active → reveal/draw → finalize), chess clock timer, XLM escrow, on-chain ZK proof & Merkle verification, game hub integration |
 | **Frontend** | React 19 · TypeScript · Vite · Tailwind CSS v4 | `frontend/` — in-browser proof generation via `@aztec/bb.js` WASM + `@noir-lang/noir_js`, Freighter wallet integration, lobby system, real-time game UI |
 | **Merkle tree** | Node.js | `js-scripts/` — precomputes Poseidon2 Merkle tree of 12,653 five-letter words (depth 14) |

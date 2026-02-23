@@ -1,7 +1,7 @@
 // Game configuration & constants
 
 // The contract deployed on Stellar testnet
-export const CONTRACT_ID = "CDYR2YNNYXZ252ARES3U3PXUFLZE3WPHA4G6V4ZPX4V35PMDPA47X6Y7";
+export const CONTRACT_ID = "CANNDXJFJIRFDVPY55A4HMKZUKY2H2ZUJJEDSS25VUPYTVFDU4JK3VSQ";
 
 // Stellar testnet RPC
 export const RPC_URL = "https://stellar.liquify.com/api=41EEWAH79Y5OCGI7/testnet";
@@ -14,7 +14,7 @@ export const MAX_GUESSES = 6;
 export const TURN_DURATION_MS = 5 * 60 * 1000;
 
 // Native XLM Stellar Asset Contract on testnet
-export const NATIVE_TOKEN_ID = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+export const NATIVE_TOKEN_ID = "CANNDXJFJIRFDVPY55A4HMKZUKY2H2ZUJJEDSS25VUPYTVFDU4JK3VSQ";
 
 // 1 XLM = 10^7 stroops
 export const STROOPS_PER_XLM = 10_000_000;

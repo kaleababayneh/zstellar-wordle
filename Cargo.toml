@@ -8,7 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "eb829477e1bcd6305048d6715233598783d8b915", default-features = false, features = ["alloc"] }
-ultrahonk_soroban_verifier = { path = "word-guess-verifier", default-features = false }
+ultrahonk_soroban_verifier = { path = "wordle-soroban-verifier", default-features = false }
 
 [dev-dependencies]
 # Enable test helpers for local unit tests
