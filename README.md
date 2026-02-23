@@ -10,7 +10,9 @@ Simply hashing a word and committing it on-chain is vulnerable to dictionary bru
 
 When a player makes a guess, the opponent generates the wordle result (🟩🟨⬛) locally and send the result of the guess along with  a ZK proof that the result is computed honestly against the already-committed word. The proof is verified on-chain, each guess result is proven correct *without ever revealing the secret word*.
 
-We also need to ensure every word — both committed and guessed — is a valid English word. The 12,653 five-letter words (sourced from the [`an-array-of-english-words`](https://www.npmjs.com/package/an-array-of-english-words) npm package) are hashed and stored off-chain in a Poseidon2 Merkle tree (depth 14). The Merkle root is baked into two places depending on the use case. For **committed words**, verifying the Merkle proof on-chain would reveal the secret word through the witness, so instead the proof is done *inside the ZK circuit* — the Merkle root is baked into the word-commit circuit as a compile-time constant, making each proof self-certifying (a valid proof is impossible against a different word list without recompiling the circuit and regenerating the verification key). For **guessed words**, since guesses are public anyway, the contract verifies the Merkle proof directly on-chain against a root hardcoded in the contract, not requiring a ZK proof.
+We also need to ensure every word — both committed and guessed — is a valid English word. The 12,653 five-letter words (sourced from the [`an-array-of-english-words`](https://www.npmjs.com/package/an-array-of-english-words) npm package) are hashed and stored off-chain in a Poseidon2 Merkle tree (depth 14). The Merkle root is baked into **two** places depending on the use case. For **committed words**, verifying the Merkle proof on-chain would reveal the secret word through the witness, so instead the proof is done *inside the ZK circuit* — the Merkle root is baked into the word-commit circuit as a compile-time constant, making each proof self-certifying (a valid proof is impossible against a different word list without recompiling the circuit and regenerating the verification key). For **guessed words**, since guesses are public anyway, the contract verifies the Merkle proof directly on-chain against a root hardcoded in the contract, not requiring a ZK proof. 
+
+To ensure transactions succeed reliably, each transaction uses a 1 XLM fee cap. This is intentionally high for testnet convenience and can be optimized for production.
 
 ## How It Works
 
@@ -83,14 +85,8 @@ Soroban contracts require a wallet signature for every transaction, which means 
 2. **Fund session key** — Freighter popup #2 (sends 9 XLM to a temporary keypair via `createAccount`)
 3. **Register session key** — the funded keypair self-registers on-chain (silent, no popup)
 4. **All gameplay** (submit turns, reveal word, resign, claim timeout, withdraw) — signed by the session key, **zero popups**
-5. **Game ends** — the 9 XLM is automatically reclaimed back to the player's wallet via `accountMerge` (silent)
-
-### Security Model
-
-- Session keys **cannot steal funds**: the contract's `withdraw` function always resolves the session key back to the real player address via `resolve_caller_simple` before transferring tokens
-- Session keys are **game-scoped**: each key is bound to a single `game_id` via bidirectional storage mappings (`key_session_key` / `key_session_reverse`)
-- Session keys are **ephemeral**: stored in `sessionStorage` (cleared when the browser tab closes) and backed by Soroban temporary storage (auto-expires on-chain)
-- **Funds auto-reclaim**: a `useEffect` in the frontend polls for game-over phase transitions and triggers `accountMerge` automatically for both winner and loser
+5. **Game ends** — what remains of the 9 XLM is automatically reclaimed back to the player's wallet via `accountMerge` (silent)
+ 
 
 ## Quick Start
 
