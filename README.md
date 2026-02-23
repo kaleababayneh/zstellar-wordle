@@ -73,6 +73,25 @@ We also need to ensure every word — both committed and guessed — is a valid 
 - **Turn structure**: Max 13 turns (6 guesses per player + 1 final verification). Turn 1 is guess-only (no ZK proof needed); turns 2–12 combine ZK verification of the previous guess with a new guess; turn 13 is verify-only.
 - **Game hub integration**: The contract notifies an external game hub contract on game start/end for cross-game tracking.
 
+## Session Keys
+
+Soroban contracts require a wallet signature for every transaction, which means **8–12+ Freighter popups per game**. Session keys reduce this to **just 2 popups** for the entire game.
+
+### How It Works
+
+1. **Create/Join game** — Freighter popup #1 (escrow deposit)
+2. **Fund session key** — Freighter popup #2 (sends 9 XLM to a temporary keypair via `createAccount`)
+3. **Register session key** — the funded keypair self-registers on-chain (silent, no popup)
+4. **All gameplay** (submit turns, reveal word, resign, claim timeout, withdraw) — signed by the session key, **zero popups**
+5. **Game ends** — the 9 XLM is automatically reclaimed back to the player's wallet via `accountMerge` (silent)
+
+### Security Model
+
+- Session keys **cannot steal funds**: the contract's `withdraw` function always resolves the session key back to the real player address via `resolve_caller_simple` before transferring tokens
+- Session keys are **game-scoped**: each key is bound to a single `game_id` via bidirectional storage mappings (`key_session_key` / `key_session_reverse`)
+- Session keys are **ephemeral**: stored in `sessionStorage` (cleared when the browser tab closes) and backed by Soroban temporary storage (auto-expires on-chain)
+- **Funds auto-reclaim**: a `useEffect` in the frontend polls for game-over phase transitions and triggers `accountMerge` automatically for both winner and loser
+
 ## Quick Start
 
 ### Prerequisites
@@ -119,6 +138,8 @@ cd frontend && npm install && npm run dev
 | `resign(game_id, caller)` | Forfeit the game immediately; opponent wins |
 | `claim_timeout(game_id, caller, reveal_word, public_inputs, proof_bytes)` | Claim timeout win when opponent's clock expires; bundles reveal + finalize in one tx |
 | `withdraw(game_id, caller)` | Winner gets 2× escrow; in draw, each player gets their escrow back (must reveal first) |
+| `register_session_key(game_id, player, session_key)` | Session key self-registers for silent gameplay; auth from session key, validates player is in game |
+| `get_session_key(game_id, player)` | Returns the registered session key address for a player in a game |
 
 <details>
 <summary><strong>Query Functions</strong></summary>
@@ -165,6 +186,7 @@ cd frontend && npm install && npm run dev
 | 16 | AlreadyWithdrawn | Escrow already claimed |
 | 17 | NotWinner | Withdrawal without winning |
 | 18 | InvalidReveal | Revealed word doesn't match commitment |
+| 19 | InvalidSessionKey | Session key is not registered for this game |
 
 </details>
 

@@ -26,7 +26,7 @@ export function useGamePolling(gs: UseGameReturn) {
   const {
     game, setGame,
     gameOver, setGameOver,
-    setGameWon,
+    gameWon, setGameWon,
     setMyTimeLeft, setOppTimeLeft,
     isMyTurn, setIsMyTurn,
     myTimeLeft, oppTimeLeft,
@@ -233,9 +233,16 @@ export function useGamePolling(gs: UseGameReturn) {
       return;
     }
 
-    const isGameOver = onChainPhase === PHASE.FINALIZED || onChainPhase === PHASE.DRAW;
+    // Only auto-reclaim on FINALIZED — NOT DRAW.
+    // During DRAW, the session key is still needed for reveal_word_draw + withdraw.
+    const isGameOver = onChainPhase === PHASE.FINALIZED;
     if (!isGameOver || reclaimedRef.current) return;
     if (!game.myAddress || !sessionKeyService.isReady(game.gameId)) return;
+
+    // DON'T auto-reclaim for the WINNER — they still need the session key
+    // to sign `withdraw`. Their reclaim happens in handleWithdraw's finally block.
+    // Only auto-reclaim for the LOSER (who can't withdraw and has no other action).
+    if (gameWon && !game.escrowWithdrawn) return;
 
     reclaimedRef.current = true; // prevent repeated attempts
 
@@ -249,7 +256,7 @@ export function useGamePolling(gs: UseGameReturn) {
         console.warn("[SessionKey] Auto-reclaim failed:", err);
       }
     })();
-  }, [game, onChainPhase]);
+  }, [game, onChainPhase, gameWon]);
 
   return { pollGameState };
 }
