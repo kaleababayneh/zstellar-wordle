@@ -172,6 +172,15 @@ export function useGamePolling(gs: UseGameReturn) {
         if (!g.escrowAmount || isNaN(g.escrowAmount)) {
           g.escrowAmount = chainEscrowXlm > 0 ? chainEscrowXlm : 0;
         }
+
+        // Preserve local flags that may have been set by handleWithdraw/handleRevealWordDraw
+        // Re-read from localStorage to get the latest values and avoid overwriting them
+        const freshG = loadGame();
+        if (freshG) {
+          g.escrowWithdrawn = freshG.escrowWithdrawn;
+          g.drawRevealed = freshG.drawRevealed;
+        }
+
         saveGame(g);
         setGame({ ...g });
       }
