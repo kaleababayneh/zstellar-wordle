@@ -85,7 +85,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       const { generateWordCommitProof } = await import("../generateWordCommitProof");
       const wcProof = await generateWordCommitProof(
         newGame.commitmentHash, newGame.salt, newGame.letterCodes,
-        posMerkle.pathElements, posMerkle.pathIndices, posMerkle.root, addStatus,
+        posMerkle.pathElements, posMerkle.pathIndices, addStatus,
       );
 
       await createGameOnChain(
@@ -165,7 +165,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
       const { generateWordCommitProof } = await import("../generateWordCommitProof");
       const wcProof = await generateWordCommitProof(
         newGame.commitmentHash, newGame.salt, newGame.letterCodes,
-        posMerkle.pathElements, posMerkle.pathIndices, posMerkle.root, addStatus,
+        posMerkle.pathElements, posMerkle.pathIndices, addStatus,
       );
 
       await joinGameOnChain(

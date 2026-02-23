@@ -1303,8 +1303,8 @@ impl TwoPlayerWordleContract {
 
     /// Verify a word-commit ZK proof.
     /// The circuit proves: (1) commitment = Poseidon2(salt, l1..l5),
-    ///                      (2) the word is in the Poseidon2 Merkle tree.
-    /// Public inputs layout: [commitment_hash (32 bytes), merkle_root (32 bytes)]
+    ///                      (2) the word is in the Poseidon2 Merkle tree (root baked into VK).
+    /// Public inputs layout: [commitment_hash (32 bytes)]
     fn do_verify_word_commit(
         env: &Env,
         commitment: &BytesN<32>,

@@ -3,9 +3,9 @@
  *
  * The circuit (circuit-word-commit) proves:
  *   1. commitment_hash == Poseidon2(salt, l1, l2, l3, l4, l5)
- *   2. The word is a member of the Poseidon2 Merkle tree (root = merkle_root)
+ *   2. The word is a member of the Poseidon2 Merkle tree (root baked into circuit)
  *
- * Public inputs:  commitment_hash (field), merkle_root (field)
+ * Public inputs:  commitment_hash (field)
  * Private inputs: merkle_path[14], merkle_indices[14], letters[5], salt
  */
 
@@ -18,7 +18,7 @@ import wcCircuitJson from "./circuit-word-commit/circuit.json";
 export interface WordCommitProofArtifacts {
   /** Raw proof bytes */
   proof: Uint8Array;
-  /** Encoded public inputs (commitment_hash + merkle_root = 2 × 32 bytes) */
+  /** Encoded public inputs (commitment_hash = 1 × 32 bytes) */
   publicInputsBytes: Uint8Array;
 }
 
@@ -74,7 +74,6 @@ function encodeField(value: any): Uint8Array {
  * @param letterCodes     5 ASCII codes
  * @param merklePath      14 field-element hex strings (siblings)
  * @param merkleIndices   14 direction indices (0 or 1)
- * @param merkleRoot      Root hex string (0x…)
  */
 export async function generateWordCommitProof(
   commitmentHash: string,
@@ -82,7 +81,6 @@ export async function generateWordCommitProof(
   letterCodes: number[],
   merklePath: string[],
   merkleIndices: number[],
-  merkleRoot: string,
   onStatus?: (msg: string) => void
 ): Promise<WordCommitProofArtifacts> {
   const log = onStatus ?? console.log;
@@ -93,7 +91,6 @@ export async function generateWordCommitProof(
 
   const inputs: Record<string, unknown> = {
     commitment_hash: commitmentHash,
-    merkle_root: merkleRoot,
     merkle_path: merklePath,
     merkle_indices: merkleIndices,
     first_letter: letterCodes[0].toString(),
@@ -121,10 +118,10 @@ export async function generateWordCommitProof(
     `Word-commit proof generated in ${((performance.now() - t0) / 1000).toFixed(1)}s ✅`
   );
 
-  // Encode public inputs: commitment_hash, merkle_root (2 fields × 32 bytes)
-  const publicInputsBytes = new Uint8Array(64);
+  // Encode public inputs: commitment_hash only (1 field × 32 bytes)
+  // merkle_root is baked into the circuit as a constant
+  const publicInputsBytes = new Uint8Array(32);
   publicInputsBytes.set(encodeField(commitmentHash), 0);
-  publicInputsBytes.set(encodeField(merkleRoot), 32);
 
   const rawProof: Uint8Array = proof.proof ?? proof;
 

@@ -1,10 +1,11 @@
 use poseidon::poseidon2::Poseidon2;
 
+// Poseidon2 Merkle root of the 12,653 five-letter word list (depth 14).
+global MERKLE_ROOT: Field = 0x0ae4b821bcbfcc5f6a3b711a48ceb8a86baad969d64fb90cfd2e2b3670e37dc7;
+
 fn main(
     // hash of all letters with salt
     commitment_hash: pub Field,
-    // Poseidon2 Merkle root of the word list
-    merkle_root: pub Field,
     //  Private inputs 
     // Merkle proof for the committed word
     merkle_path: [Field; 14],
@@ -43,53 +44,7 @@ fn main(
         current_hash = Poseidon2::hash([left, right], 2);
     }
 
-    // Verify the computed root matches the public Merkle root
-    assert(current_hash == merkle_root);
+    // Verify the computed root matches the baked-in Merkle root
+    assert(current_hash == MERKLE_ROOT);
 }
 
-
-#[test]
-fn test_word_commit() {
-    // Word: "apple" -> a=97, p=112, p=112, l=108, e=101
-    let salt = Field::from(0);
-    let first_letter = Field::from(97);
-    let second_letter = Field::from(112);
-    let third_letter = Field::from(112);
-    let fourth_letter = Field::from(108);
-    let fifth_letter = Field::from(101);
-
-    // Compute commitment
-    let commitment_hash = Poseidon2::hash(
-        [salt, first_letter, second_letter, third_letter, fourth_letter, fifth_letter], 6
-    );
-
-    // Compute leaf
-    let leaf = first_letter * 256 * 256 * 256 * 256
-             + second_letter * 256 * 256 * 256
-             + third_letter * 256 * 256
-             + fourth_letter * 256
-             + fifth_letter;
-
-    let zero = Field::from(0);
-    let merkle_path = [zero; 14];
-    let merkle_indices = [0; 14];
-
-    // Compute expected root by hashing up 14 levels
-    let mut expected_root = leaf;
-    for _i in 0..14 {
-        expected_root = Poseidon2::hash([expected_root, zero], 2);
-    }
-
-    main(
-        commitment_hash,
-        expected_root,
-        merkle_path,
-        merkle_indices,
-        first_letter,
-        second_letter,
-        third_letter,
-        fourth_letter,
-        fifth_letter,
-        salt,
-    );
-}
