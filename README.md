@@ -1,6 +1,8 @@
-# ZK Wordle on Stellar
+# 🟩 ZK Wordle on Stellar 
 
-A **peer-to-peer Wordle** where each player picks a secret word and races to guess the opponent's. Both players' secret words stay privately in the browser while proven correct with zero-knowledge proofs using circuits written in Noir. The proofs are verified on-chain via a Soroban smart contract on the Stellar testnet. Optional XLM escrow makes it a stakes game.
+A **peer-to-peer Wordle** (can be played in [zkwordle.app](https://zkwordle.app) as well) a fun game where each player picks a secret word and races to crack each other's word. Both players' secret words stay privately in the browser while proven correct with zero-knowledge proofs using circuits written in Noir. The proofs are verified on-chain via a Soroban smart contract on the Stellar testnet. Optional XLM escrow makes it a stakes game.
+ 
+
 
 ## Why Zero-Knowledge?
 
@@ -8,7 +10,7 @@ Simply hashing a word and committing it on-chain is vulnerable to dictionary bru
 
 When a player makes a guess, the opponent generates the wordle result (🟩🟨⬛) locally and send the result of the guess along with  a ZK proof that the result is computed honestly against the already-committed word. The proof is verified on-chain, each guess result is proven correct *without ever revealing the secret word*.
 
-We also need to ensure every word — both committed and guessed — is a valid English word. All 12,653 five-letter words are hashed and stored off-chain in a Poseidon2 Merkle tree whose root is hardcoded in the contract. For **committed words**, verifying the Merkle proof on-chain would reveal the secret word through the witness, so instead the proof is done *inside the ZK circuit* (zero-knowledge Merkle membership). For **guessed words**, since guesses are public anyway, the contract verifies the Merkle proof directly on-chain, not requiring a ZK proof.
+We also need to ensure every word — both committed and guessed — is a valid English word. The 12,653 five-letter words (sourced from the [`an-array-of-english-words`](https://www.npmjs.com/package/an-array-of-english-words) npm package) are hashed and stored off-chain in a Poseidon2 Merkle tree whose root is hardcoded in the contract. After the Merkle tree is constructed, it can also be stored in decentralized storage accessible to everyone; currently the tree is saved as a JSON file in the frontend. For **committed words**, verifying the Merkle proof on-chain would reveal the secret word through the witness, so instead the proof is done *inside the ZK circuit* (zero-knowledge Merkle membership). For **guessed words**, since guesses are public anyway, the contract verifies the Merkle proof directly on-chain, not requiring a ZK proof.
 
 ## How It Works
 
