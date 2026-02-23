@@ -97,7 +97,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
 
       // ── Session key: init + fund + register on-chain ──
       const sk = sessionKeyService.initSessionKey(gameId);
-      addStatus(`Funding session key ${sk.publicKey.slice(0, 8)}… with 20 XLM…`);
+      addStatus(`Funding session key ${sk.publicKey.slice(0, 8)}… with 9 XLM…`);
       try {
         await sessionKeyService.fundFromWallet(wallet.address, wallet.sign);
         addStatus(`Registering session key on-chain…`);
@@ -177,7 +177,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
 
       // ── Session key: init + fund + register on-chain ──
       const sk = sessionKeyService.initSessionKey(gameId);
-      addStatus(`Funding session key ${sk.publicKey.slice(0, 8)}… with 20 XLM…`);
+      addStatus(`Funding session key ${sk.publicKey.slice(0, 8)}… with 9 XLM…`);
       try {
         await sessionKeyService.fundFromWallet(wallet.address, wallet.sign);
         addStatus(`Registering session key on-chain…`);
@@ -543,7 +543,7 @@ export function useGameActions({ gs, wallet, proverReady, pollGameState }: UseGa
         try {
           addStatus("Reclaiming session key funds…");
           await sessionKeyService.reclaimFunds(wallet.address);
-          addStatus("Session key 20 XLM reclaimed ✅");
+          addStatus("Session key 9 XLM reclaimed ✅");
           sessionKeyService.clear();
         } catch (reclaimErr: any) {
           addStatus(`⚠️ Fund reclaim skipped: ${reclaimErr.message}`);

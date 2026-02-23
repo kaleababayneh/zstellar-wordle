@@ -79,7 +79,7 @@ class SessionKeyService {
     async fundFromWallet(
         playerPublicKey: string,
         signTx: SignTransaction,
-        xlmAmount: string = "20"
+        xlmAmount: string = "9"
     ): Promise<void> {
         if (!this.keypair) {
             throw new Error("Session key not initialized");
